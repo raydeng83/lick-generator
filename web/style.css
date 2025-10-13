@@ -28,8 +28,12 @@ h1 { margin: 0; font-size: 22px; font-weight: 600; }
 .field .inline { display: inline-flex; align-items: center; gap: 8px; color: var(--text); }
 .hint { font-size: 12px; color: var(--muted); }
 
-textarea, input[type="number"] {
+textarea, input[type="number"], select {
   width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #d2d9e3; background: #ffffff; color: var(--text);
+}
+
+select {
+  cursor: pointer;
 }
 
 button { padding: 8px 12px; border-radius: 8px; border: 1px solid #d2d9e3; background: var(--btn); color: var(--text); cursor: pointer; }

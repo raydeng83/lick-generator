@@ -7,6 +7,7 @@
   const ui = {
     progression: $("#progression"),
     tempo: $("#tempo"),
+    instrument: $("#instrument"),
     metronome: $("#metronome"),
     generate: $("#generate"),
     play: $("#play"),
@@ -18,7 +19,7 @@
   };
 
   // Seed example progression
-  ui.progression.value = ui.progression.value || "Dm7 | G7 | Cmaj7 | Cmaj7";
+  ui.progression.value = ui.progression.value || "Dm7 | G7 | Cmaj7";
 
   let lastModel = null;
 
@@ -56,8 +57,17 @@
         const model = buildModel();
         renderAll(model);
       }
+      const instrumentName = ui.instrument.value;
+      const needsLoading = instrumentName !== 'synth';
+
+      setStatus(needsLoading ? "Loading samples..." : "Playing...");
+      await AudioEngine.play({
+        lick: lastModel.lick,
+        metadata: lastModel.metadata,
+        metronome: ui.metronome.checked,
+        instrument: instrumentName
+      });
       setStatus("Playing...");
-      await AudioEngine.play({ lick: lastModel.lick, metadata: lastModel.metadata, metronome: ui.metronome.checked });
     } catch (e) {
       console.error(e);
       setStatus("Playback error.");

@@ -4,24 +4,35 @@ This is a minimal, no-build web prototype for exploring a rule-based jazz lick g
 
 Quickstart
 
-- Open `web/index.html` in a modern browser (Chrome, Edge, or Safari).
-- If your browser blocks local file audio, serve locally:
-  - Python: `python3 -m http.server -d web 5173`
-  - Then open: `http://localhost:5173`
+**Important**: Due to CORS restrictions with local audio files, you must serve the app via HTTP:
+
+```bash
+# Start local server
+python3 -m http.server -d web 5173
+
+# Then open in browser
+open http://localhost:5173
+```
+
+Or use any other local server (Node's `http-server`, PHP's built-in server, etc.)
 
 Features
 
 - Chord progression input (iRealPro-style, e.g., `Cmaj7 | Dm7 G7 | Cmaj7 | Cmaj7`).
-- Simple rule-based generator (chord-tone targets, chromatic approaches, scale steps).
-- Staff notation rendered with VexFlow (treble, 4/4), one measure per chord with the chord symbol above the first note of that measure.
-- Playback with Tone.js (synth lead), metronome toggle, tempo control.
+- **Rule 1**: Always place chord tones on strong beats (beats 1, 3) - highlighted in blue with degree labels.
+- Multi-stage pipeline generator (rhythmic skeleton → harmonic function → pitch realization → post-processing).
+- **Instruments**: Piano (sampled) and Synth (samples hosted locally).
+- Staff notation rendered with VexFlow (treble, 4/4), one measure per chord with proper beaming.
+- Playback with Tone.js, metronome toggle, tempo control (40-300 BPM).
 - JSON state preview for interop.
 
 Notes
 
-- This prototype is dependency-free (no bundler). Libraries load from CDNs at runtime.
-- The generator is intentionally simple and deterministic; extend `web/generator.js` with your rules and weights.
+- This prototype is dependency-free (no bundler). VexFlow and Tone.js load from CDNs at runtime.
+- Audio samples (~1.1MB) are hosted locally in `web/samples/` for offline use and fast loading.
+- The generator uses a pipeline architecture (see `web/generator.js`) for easy extension.
 - VexFlow rendering assumes 4/4 and eighth-note quantization for simplicity.
+- **Must use HTTP server** - direct file:// access blocked by browser CORS policy.
 
 Next Steps
 

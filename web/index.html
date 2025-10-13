@@ -20,14 +20,21 @@
       <section class="controls">
         <div class="field">
           <label for="progression">Chord Progression</label>
-          <textarea id="progression" rows="3" placeholder="Dm7 | G7 | Cmaj7 | Cmaj7"></textarea>
+          <textarea id="progression" rows="3" placeholder="Dm7 | G7 | Cmaj7"></textarea>
           <div class="hint">Use `|` to separate bars. Space-separated chords split the bar equally.</div>
         </div>
 
         <div class="row">
           <div class="field">
             <label for="tempo">Tempo (BPM)</label>
-            <input id="tempo" type="number" min="40" max="300" step="1" value="120" />
+            <input id="tempo" type="number" min="40" max="300" step="1" value="100" />
+          </div>
+          <div class="field">
+            <label for="instrument">Instrument</label>
+            <select id="instrument">
+              <option value="piano">Piano</option>
+              <option value="synth">Synth</option>
+            </select>
           </div>
           <div class="field">
             <label>&nbsp;</label>
