@@ -87,7 +87,6 @@ window.LickGen = (function () {
 
   function assignHarmonicFunctions(skeleton, progression, options = {}) {
     const {
-      strongBeatRule = 'chord-tone',
       approachRule = 'chromatic-below',
       weakBeatRule = 'scale-step'
     } = options;
@@ -106,8 +105,9 @@ window.LickGen = (function () {
         quality,
       };
 
+      // RULE 1: Always put chord tones on strong beats
       if (isStrongBeat) {
-        harmonicFunc.function = strongBeatRule;
+        harmonicFunc.function = 'chord-tone';
         harmonicFunc.targetDegree = chooseChordTone();
       } else if (isApproach) {
         harmonicFunc.function = approachRule;
@@ -129,16 +129,19 @@ window.LickGen = (function () {
 
     return functionalPhrase.map((note, idx) => {
       let midi;
+      let degree = null;
       const nextNote = functionalPhrase[idx + 1];
 
       switch (note.function) {
         case 'chord-tone':
-          midi = resolveChordTone(note, lastMidi);
+          const result = resolveChordTone(note, lastMidi);
+          midi = result.midi;
+          degree = result.degree;
           break;
 
         case 'chromatic-below':
-          const target = nextNote ? resolveChordTone(nextNote, lastMidi) : lastMidi;
-          midi = target - 1;
+          const targetResult = nextNote ? resolveChordTone(nextNote, lastMidi) : { midi: lastMidi };
+          midi = targetResult.midi - 1;
           break;
 
         case 'scale-step':
@@ -159,6 +162,7 @@ window.LickGen = (function () {
         velocity: 0.9,
         ruleId: note.function,
         harmonicFunction: note.function,
+        degree,
       };
     });
   }
@@ -167,9 +171,9 @@ window.LickGen = (function () {
 
   function selectGenerationStrategy(progression, metadata) {
     // Branch based on tempo - fast tempos use simpler approach patterns
+    // Note: Strong beats always use chord tones (Rule 1)
     if (metadata.tempo > 200) {
       return {
-        strongBeatRule: 'chord-tone',
         approachRule: 'scale-step',
         weakBeatRule: 'scale-step'
       };
@@ -177,7 +181,6 @@ window.LickGen = (function () {
 
     // Default bebop-style strategy
     return {
-      strongBeatRule: 'chord-tone',
       approachRule: 'chromatic-below',
       weakBeatRule: 'scale-step'
     };
@@ -231,7 +234,9 @@ window.LickGen = (function () {
 
   function resolveChordTone(note, nearMidi) {
     const chordPcs = chordPitchClasses(note.rootPc, note.quality);
-    return nearestChordTone(nearMidi, note.rootPc, chordPcs);
+    const midi = nearestChordTone(nearMidi, note.rootPc, chordPcs);
+    const degree = getChordDegree(midi, note.rootPc, chordPcs);
+    return { midi, degree };
   }
 
   function nearestChordTone(midiPrev, rootPc, chordPcs) {
@@ -239,6 +244,28 @@ window.LickGen = (function () {
     const candidates = pcs.map(pc => clampRange(pcToMidiNear(pc, midiPrev ?? 64)));
     candidates.sort((a, b) => Math.abs(a - (midiPrev ?? 64)) - Math.abs(b - (midiPrev ?? 64)));
     return candidates[0];
+  }
+
+  function getChordDegree(midi, rootPc, chordPcs) {
+    // Map pitch class to chord degree (1, 3, 5, 7, 9, 11, 13)
+    const pc = (midi % 12 + 12) % 12;
+    const relPc = (pc - rootPc + 12) % 12;
+
+    // Map relative pitch class to degree
+    const degreeMap = {
+      0: '1',   // root
+      2: '9',   // 9th
+      3: 'b3',  // minor 3rd
+      4: '3',   // major 3rd
+      5: '11',  // 11th
+      6: 'b5',  // flat 5
+      7: '5',   // 5th
+      9: '13',  // 13th
+      10: 'b7', // minor 7th
+      11: '7'   // major 7th
+    };
+
+    return degreeMap[relPc] || '?';
   }
 
   function resolveScaleStep(note, lastMidi) {

@@ -95,6 +95,21 @@ window.Notate = (function () {
         }
         const dur = durationFromBeats(n.durationBeats);
         const sn = new VF.StaveNote({ keys: [midiToKey(n.midi)], duration: dur, auto_stem: true });
+
+        // Highlight chord tones with blue color and add degree annotation below
+        if (n.harmonicFunction === 'chord-tone' || n.ruleId === 'chord-tone') {
+          sn.setStyle({ fillStyle: '#4cc3ff', strokeStyle: '#4cc3ff' });
+
+          // Add degree annotation below the note
+          if (n.degree) {
+            const degreeAnn = new VF.Annotation(n.degree)
+              .setFont('Arial', 11, 'bold')
+              .setJustification(VF.Annotation.Justify.CENTER)
+              .setVerticalJustification(VF.Annotation.VerticalJustify.BOTTOM);
+            sn.addAnnotation(0, degreeAnn);
+          }
+        }
+
         notes.push(sn);
         cursorE8 += durE8;
       }
