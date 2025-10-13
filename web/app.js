@@ -9,6 +9,7 @@
     tempo: $("#tempo"),
     instrument: $("#instrument"),
     metronome: $("#metronome"),
+    chords: $("#chords"),
     generate: $("#generate"),
     play: $("#play"),
     stop: $("#stop"),
@@ -65,7 +66,9 @@
         lick: lastModel.lick,
         metadata: lastModel.metadata,
         metronome: ui.metronome.checked,
-        instrument: instrumentName
+        instrument: instrumentName,
+        chords: ui.chords.checked,
+        progression: lastModel.progression
       });
       setStatus("Playing...");
     } catch (e) {

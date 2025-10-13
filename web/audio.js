@@ -4,8 +4,10 @@ window.AudioEngine = (function () {
   const state = {
     instruments: {},
     currentInstrument: null,
+    chordSynth: null,
     click: null,
     part: null,
+    chordPart: null,
     metro: null,
   };
 
@@ -43,6 +45,16 @@ window.AudioEngine = (function () {
         envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.1 },
       }).toDestination();
       console.log('[AudioEngine] Synth created successfully');
+    }
+
+    // Create chord synth if not exists
+    if (!state.chordSynth) {
+      state.chordSynth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.02, decay: 0.3, sustain: 0.4, release: 1 },
+        volume: -12,
+      }).toDestination();
+      console.log('[AudioEngine] Chord synth created');
     }
 
     // Create metronome click if not exists
@@ -117,6 +129,88 @@ window.AudioEngine = (function () {
     return note + octave;
   }
 
+  function noteToMidi(noteName) {
+    const noteMap = { "C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11 };
+    const match = noteName.match(/^([A-G])([b#]?)(\d+)$/);
+    if (!match) return 60; // default to C4
+
+    const letter = match[1];
+    const accidental = match[2];
+    const octave = parseInt(match[3]);
+
+    let pc = noteMap[letter];
+    if (accidental === "b") pc -= 1;
+    if (accidental === "#") pc += 1;
+
+    return (octave + 1) * 12 + pc;
+  }
+
+  function generateChordVoicing(symbol) {
+    // Parse root and quality (reuse generator logic)
+    const rootMatch = symbol.match(/^([A-Ga-g])([b#]?)/);
+    if (!rootMatch) return [];
+
+    const rootLetter = rootMatch[1].toUpperCase();
+    const accidental = rootMatch[2] || "";
+    const rootNoteName = rootLetter + accidental;
+
+    const rest = symbol.replace(/^([A-Ga-g][b#]?)/, "");
+    let quality = "maj7";
+    if (/maj7|Δ|maj/i.test(rest)) quality = "maj7";
+    else if (/(m7b5|ø)/i.test(rest)) quality = "m7b5";
+    else if (/(dim|o7)/i.test(rest)) quality = "dim7";
+    else if (/(m7|min7|−7|mi7|m)/i.test(rest)) quality = "m7";
+    else if (/(7)/.test(rest)) quality = "7";
+
+    // Create jazz voicing in mid range
+    const octave = 3;
+    const rootMidi = noteToMidi(rootNoteName + octave);
+
+    // Build intervals based on quality
+    let intervals = [];
+    switch(quality) {
+      case "maj7":
+        intervals = [0, 4, 7, 11]; // root, M3, P5, M7
+        break;
+      case "m7":
+        intervals = [0, 3, 7, 10]; // root, m3, P5, m7
+        break;
+      case "7":
+        intervals = [0, 4, 7, 10]; // root, M3, P5, m7
+        break;
+      case "m7b5":
+        intervals = [0, 3, 6, 10]; // root, m3, dim5, m7
+        break;
+      case "dim7":
+        intervals = [0, 3, 6, 9]; // root, m3, dim5, dim7
+        break;
+      default:
+        intervals = [0, 4, 7, 11];
+    }
+
+    // Convert to note names
+    return intervals.map(interval => midiToNote(rootMidi + interval));
+  }
+
+  function scheduleChords(progression, enabled) {
+    if (state.chordPart) { state.chordPart.dispose(); state.chordPart = null; }
+    if (!enabled) return;
+
+    // Create chord events at start of each measure
+    const events = progression.map((ch, idx) => ({
+      time: `${idx}:0:0`,
+      notes: generateChordVoicing(ch.symbol),
+      duration: "1n", // whole note
+    }));
+
+    console.log('[AudioEngine] Scheduling chords:', events);
+
+    state.chordPart = new Tone.Part((time, ev) => {
+      state.chordSynth.triggerAttackRelease(ev.notes, ev.duration, time, 0.5);
+    }, events).start(0);
+    state.chordPart.loop = 0; // play once
+  }
+
   function scheduleMetronome(enabled) {
     if (state.metro) { state.metro.dispose(); state.metro = null; }
     if (!enabled) return;
@@ -129,8 +223,8 @@ window.AudioEngine = (function () {
     state.metro.start(0);
   }
 
-  async function play({ lick, metadata, metronome, instrument = 'piano' }) {
-    console.log('[AudioEngine] play() called with instrument:', instrument);
+  async function play({ lick, metadata, metronome, instrument = 'piano', chords = false, progression = [] }) {
+    console.log('[AudioEngine] play() called with instrument:', instrument, 'chords:', chords);
     ensureInstruments();
     setInstrument(instrument);
 
@@ -149,6 +243,7 @@ window.AudioEngine = (function () {
     Tone.Transport.timeSignature = 4;
 
     scheduleLick(lick);
+    scheduleChords(progression, chords);
     scheduleMetronome(metronome);
 
     // compute loop end and schedule stop
