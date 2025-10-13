@@ -96,8 +96,9 @@ window.Notate = (function () {
         const dur = durationFromBeats(n.durationBeats);
         const sn = new VF.StaveNote({ keys: [midiToKey(n.midi)], duration: dur, auto_stem: true });
 
-        // Highlight chord tones with blue color and add degree annotation below
+        // Color code notes by harmonic function
         if (n.harmonicFunction === 'chord-tone' || n.ruleId === 'chord-tone') {
+          // Chord tones: Blue
           sn.setStyle({ fillStyle: '#4cc3ff', strokeStyle: '#4cc3ff' });
 
           // Add degree annotation below the note
@@ -108,6 +109,12 @@ window.Notate = (function () {
               .setVerticalJustification(VF.Annotation.VerticalJustify.BOTTOM);
             sn.addAnnotation(0, degreeAnn);
           }
+        } else if (n.harmonicFunction === 'chromatic-below' || n.ruleId === 'chromatic-below') {
+          // Chromatic approaches: Orange
+          sn.setStyle({ fillStyle: '#ff9500', strokeStyle: '#ff9500' });
+        } else if (n.harmonicFunction === 'scale-step' || n.ruleId === 'scale-step') {
+          // Scale tones: Green
+          sn.setStyle({ fillStyle: '#34c759', strokeStyle: '#34c759' });
         }
 
         notes.push(sn);
@@ -118,14 +125,26 @@ window.Notate = (function () {
         cursorE8 += 1;
       }
 
-      // Place chord symbol above first pitched note BEFORE formatting/drawing
+      // Place chord symbol and scale name above first pitched note BEFORE formatting/drawing
       const firstNote = notes.find(n => String(n.getDuration()).indexOf('r') === -1);
       if (firstNote) {
+        // Add chord symbol
         const ann = new VF.Annotation(seg.symbol)
           .setFont('Arial', 12, 'normal')
           .setJustification(VF.Annotation.Justify.LEFT)
           .setVerticalJustification(VF.Annotation.VerticalJustify.TOP);
         firstNote.addAnnotation(0, ann);
+
+        // Add scale name below chord symbol (if we have scale info)
+        const firstSegNote = segNotes[0];
+        if (firstSegNote && firstSegNote.scaleName) {
+          const scaleDisplayName = window.Scales ? window.Scales.getScaleDisplayName(firstSegNote.scaleName) : firstSegNote.scaleName;
+          const scaleAnn = new VF.Annotation(scaleDisplayName)
+            .setFont('Arial', 9, 'italic')
+            .setJustification(VF.Annotation.Justify.LEFT)
+            .setVerticalJustification(VF.Annotation.VerticalJustify.TOP);
+          firstNote.addAnnotation(1, scaleAnn);
+        }
       }
 
       const voice = new VF.Voice({ num_beats: 4, beat_value: 4 }).setStrict(true);

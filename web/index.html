@@ -37,6 +37,14 @@
             </select>
           </div>
           <div class="field">
+            <label for="scaleStrategy">Scale Strategy</label>
+            <select id="scaleStrategy">
+              <option value="default">Default (Most Common)</option>
+              <option value="varied">Varied (Random Choice)</option>
+              <option value="exotic">Exotic (Outside Choices)</option>
+            </select>
+          </div>
+          <div class="field">
             <label>&nbsp;</label>
             <label class="inline"><input id="metronome" type="checkbox" /> Metronome</label>
             <label class="inline"><input id="chords" type="checkbox" checked /> Chords</label>
@@ -51,6 +59,11 @@
       </section>
 
       <section class="notation">
+        <div class="legend">
+          <span class="legend-item"><span class="color-box chord-tone"></span> Chord Tone</span>
+          <span class="legend-item"><span class="color-box scale-tone"></span> Scale Tone</span>
+          <span class="legend-item"><span class="color-box chromatic"></span> Chromatic Approach</span>
+        </div>
         <div id="notation"></div>
       </section>
 
@@ -68,6 +81,7 @@
     </div>
 
     <script src="./schema.js"></script>
+    <script src="./scales.js"></script>
     <script src="./generator.js"></script>
     <script src="./notate.js"></script>
     <script src="./audio.js"></script>

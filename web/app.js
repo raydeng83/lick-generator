@@ -8,6 +8,7 @@
     progression: $("#progression"),
     tempo: $("#tempo"),
     instrument: $("#instrument"),
+    scaleStrategy: $("#scaleStrategy"),
     metronome: $("#metronome"),
     chords: $("#chords"),
     generate: $("#generate"),
@@ -30,7 +31,13 @@
     const meta = Schema.defaultMetadata();
     meta.tempo = parseInt(ui.tempo.value || "120", 10) || 120;
     const { progression, bars } = Schema.parseProgression(ui.progression.value);
-    const lick = LickGen.generateLick(progression, meta);
+
+    // Pass scale strategy to generator
+    const options = {
+      scaleStrategy: ui.scaleStrategy.value || 'default'
+    };
+
+    const lick = LickGen.generateLick(progression, meta, options);
     const model = { progression, bars, lick, metadata: meta };
     lastModel = model;
     return model;

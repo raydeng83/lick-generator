@@ -43,6 +43,40 @@ button:active { transform: translateY(1px); }
 
 .buttons { display: flex; gap: 8px; }
 
+.notation .legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+  padding: 8px 0;
+  font-size: 12px;
+}
+
+.notation .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.notation .color-box {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.notation .color-box.chord-tone {
+  background: #4cc3ff;
+}
+
+.notation .color-box.scale-tone {
+  background: #34c759;
+}
+
+.notation .color-box.chromatic {
+  background: #ff9500;
+}
+
 .notation #notation { background: #ffffff; border-radius: 8px; padding: 8px; overflow-x: hidden; }
 
 .json pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size: 12px; color: #334155; }
