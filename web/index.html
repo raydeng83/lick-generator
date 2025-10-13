@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jazz Lick Generator • Prototype</title>
+    <link rel="stylesheet" href="./style.css" />
+    <!-- VexFlow CDN (UMD with Vex.Flow namespace) -->
+    <script src="https://unpkg.com/vexflow@1.2.93/releases/vexflow-min.js"></script>
+    <!-- Tone.js CDN -->
+    <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <h1>Jazz Lick Generator</h1>
+        <p class="sub">Rule-based prototype with notation and audio</p>
+      </header>
+
+      <section class="controls">
+        <div class="field">
+          <label for="progression">Chord Progression</label>
+          <textarea id="progression" rows="3" placeholder="Dm7 | G7 | Cmaj7 | Cmaj7"></textarea>
+          <div class="hint">Use `|` to separate bars. Space-separated chords split the bar equally.</div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="tempo">Tempo (BPM)</label>
+            <input id="tempo" type="number" min="40" max="300" step="1" value="120" />
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <label class="inline"><input id="metronome" type="checkbox" /> Metronome</label>
+          </div>
+          <div class="spacer"></div>
+          <div class="buttons">
+            <button id="generate">Generate</button>
+            <button id="play">Play</button>
+            <button id="stop">Stop</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="notation">
+        <div id="notation"></div>
+      </section>
+
+      <section class="json">
+        <div class="row">
+          <h3>State</h3>
+          <button id="copyState" class="small">Copy JSON</button>
+        </div>
+        <pre id="state"></pre>
+      </section>
+
+      <footer>
+        <span id="status">Ready.</span>
+      </footer>
+    </div>
+
+    <script src="./schema.js"></script>
+    <script src="./generator.js"></script>
+    <script src="./notate.js"></script>
+    <script src="./audio.js"></script>
+    <script src="./app.js"></script>
+  </body>
+  </html>
