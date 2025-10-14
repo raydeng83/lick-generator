@@ -168,6 +168,24 @@ window.Notate = (function () {
 
       let noteIndex = 0; // Track index in segNotes for enclosure labeling
       for (const n of segNotes) {
+        // Handle rest notes
+        if (n.isRest) {
+          const relStartE8 = Math.round((n.startBeat - start) * 2);
+          const durE8 = Math.round(n.durationBeats * 2);
+
+          // Fill rests up to this rest note
+          while (cursorE8 < relStartE8) {
+            notes.push(new VF.StaveNote({ keys: ["b/4"], duration: "8r", auto_stem: true }));
+            cursorE8 += 1;
+          }
+
+          // Add the explicit rest note
+          const dur = durationFromBeats(n.durationBeats);
+          notes.push(new VF.StaveNote({ keys: ["b/4"], duration: dur + "r", auto_stem: true }));
+          cursorE8 += durE8;
+          continue;
+        }
+
         // Safety check: ensure note has required properties
         if (!n || typeof n.midi !== 'number' || typeof n.durationBeats !== 'number') {
           console.error('[Notate] Invalid note:', n);

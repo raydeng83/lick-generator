@@ -482,7 +482,7 @@ window.DevicesNew = (function () {
 
         notes.push({
           startBeat: measureStart + (i + 1) * 0.5,
-          durationBeats: duration,
+          durationBeats: isLastSlot ? 0.5 : duration, // All notes are 0.5 beats
           midi: currentMidi,
           velocity: 0.9,
           device: isLastSlot ? 'ending' : 'fill',
@@ -492,6 +492,22 @@ window.DevicesNew = (function () {
           scaleName: scale,
           ruleId: isChordToneNote ? 'chord-tone' : 'scale-step',
           harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
+        });
+      }
+
+      // Fill remaining slots with rests to complete the measure (8 eighth notes)
+      const totalNotesGenerated = totalSlots + 1; // target + fill notes + ending
+      const remainingSlots = 8 - totalNotesGenerated;
+      for (let i = 0; i < remainingSlots; i++) {
+        notes.push({
+          startBeat: measureStart + (totalNotesGenerated + i) * 0.5,
+          durationBeats: 0.5,
+          isRest: true, // Mark as rest
+          device: 'rest',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
         });
       }
     } else {
@@ -613,7 +629,7 @@ window.DevicesNew = (function () {
 
         notes.push({
           startBeat: measureStart + slotIndex * 0.5,
-          durationBeats: duration,
+          durationBeats: isLastSlot ? 0.5 : duration, // All notes are 0.5 beats
           midi: currentMidi,
           velocity: 0.9,
           device: isLastSlot ? 'ending' : 'fill',
@@ -623,6 +639,22 @@ window.DevicesNew = (function () {
           scaleName: scale,
           ruleId: isChordToneNote ? 'chord-tone' : 'scale-step',
           harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
+        });
+      }
+
+      // Fill remaining slots with rests to complete the measure (8 eighth notes)
+      const totalNotesGenerated = 5 + additionalSlots; // target + fill + 2 enclosures + target + additional notes
+      const remainingSlots = 8 - totalNotesGenerated;
+      for (let i = 0; i < remainingSlots; i++) {
+        notes.push({
+          startBeat: measureStart + (totalNotesGenerated + i) * 0.5,
+          durationBeats: 0.5,
+          isRest: true, // Mark as rest
+          device: 'rest',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
         });
       }
     }
