@@ -26,7 +26,7 @@
   // Seed example progression
   ui.progression.value = ui.progression.value || "Dm7 | G7 | Cmaj7";
 
-  // Update swing display
+  // Update swing display and regenerate
   function updateSwingDisplay() {
     const value = parseFloat(ui.swing.value);
     const percent = Math.round(value * 100);
@@ -39,7 +39,20 @@
     }
   }
 
-  ui.swing.addEventListener("input", updateSwingDisplay);
+  function regenerateWithSwing() {
+    updateSwingDisplay();
+    // Regenerate immediately when swing changes
+    try {
+      const model = buildModel();
+      renderAll(model);
+      setStatus("Generated with swing.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Error generating lick.");
+    }
+  }
+
+  ui.swing.addEventListener("input", regenerateWithSwing);
   updateSwingDisplay();
 
   let lastModel = null;
