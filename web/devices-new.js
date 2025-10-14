@@ -790,41 +790,36 @@ window.DevicesNew = (function () {
 
   /**
    * Generate 3-note enclosure pattern
-   * Returns 3 notes in random order that approach the target
+   * Returns 3 notes with correct ordering: two notes on same side must be consecutive
+   * Rule: When two notes on one side, outside note first, then inside note (towards target)
    */
   function generate3NoteEnclosure(targetMidi, rootPc, scalePcs, chordPcs, chord, quality, scale) {
     // Choose enclosure option: 50/50 between option 1 and option 2
     const useOption1 = Math.random() < 0.5;
 
-    let note1Midi, note2Midi, note3Midi;
+    let outsideNote, insideNote, oppositeSideNote;
 
     if (useOption1) {
       // Option 1: Two lower + one upper
-      // whole-step lower (2 semitones below target)
-      note1Midi = targetMidi - 2;
-      // half-step lower (1 semitone below target)
-      note2Midi = targetMidi - 1;
-      // scale note from above target
-      note3Midi = getUpperNeighbor(targetMidi, rootPc, scalePcs);
+      // Outside (whole-step lower - 2 semitones below target)
+      outsideNote = { midi: targetMidi - 2, type: 'lower-whole', side: 'lower', position: 'outside' };
+      // Inside (half-step lower - 1 semitone below target)
+      insideNote = { midi: targetMidi - 1, type: 'lower', side: 'lower', position: 'inside' };
+      // Opposite side (scale note from above target)
+      oppositeSideNote = { midi: getUpperNeighbor(targetMidi, rootPc, scalePcs), type: 'upper', side: 'upper', position: 'single' };
     } else {
       // Option 2: One lower + two upper
-      // half-step lower (1 semitone below target)
-      note1Midi = targetMidi - 1;
-      // half-step higher (1 semitone above target)
-      note2Midi = targetMidi + 1;
-      // whole-step higher (2 semitones above target)
-      note3Midi = targetMidi + 2;
+      // Opposite side (half-step lower - 1 semitone below target)
+      oppositeSideNote = { midi: targetMidi - 1, type: 'lower', side: 'lower', position: 'single' };
+      // Inside (half-step higher - 1 semitone above target)
+      insideNote = { midi: targetMidi + 1, type: 'upper', side: 'upper', position: 'inside' };
+      // Outside (whole-step higher - 2 semitones above target)
+      outsideNote = { midi: targetMidi + 2, type: 'upper-whole', side: 'upper', position: 'outside' };
     }
 
-    // Create array of enclosure notes with metadata
-    const enclosureNotes = [
-      { midi: note1Midi, type: useOption1 ? 'lower-whole' : 'lower' },
-      { midi: note2Midi, type: useOption1 ? 'lower' : 'upper' },
-      { midi: note3Midi, type: useOption1 ? 'upper' : 'upper-whole' },
-    ];
-
     // Check each note against scale to determine harmonicFunction
-    for (const note of enclosureNotes) {
+    const notes = [outsideNote, insideNote, oppositeSideNote];
+    for (const note of notes) {
       const pc = (note.midi % 12 + 12) % 12;
       const inScale = scalePcs.includes(pc);
 
@@ -838,10 +833,28 @@ window.DevicesNew = (function () {
       }
     }
 
-    // Randomize the order of the 3 notes (shuffle)
-    for (let i = enclosureNotes.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [enclosureNotes[i], enclosureNotes[j]] = [enclosureNotes[j], enclosureNotes[i]];
+    // Choose starting side: 50/50 between lower side or upper side
+    const startFromLowerSide = Math.random() < 0.5;
+
+    let enclosureNotes;
+    if (useOption1) {
+      // Option 1: Two lower + one upper
+      if (startFromLowerSide) {
+        // Start from lower side: outside lower → inside lower → upper
+        enclosureNotes = [outsideNote, insideNote, oppositeSideNote];
+      } else {
+        // Start from upper side: upper → outside lower → inside lower
+        enclosureNotes = [oppositeSideNote, outsideNote, insideNote];
+      }
+    } else {
+      // Option 2: One lower + two upper
+      if (startFromLowerSide) {
+        // Start from lower side: lower → inside upper → outside upper
+        enclosureNotes = [oppositeSideNote, insideNote, outsideNote];
+      } else {
+        // Start from upper side: outside upper → inside upper → lower
+        enclosureNotes = [outsideNote, insideNote, oppositeSideNote];
+      }
     }
 
     return enclosureNotes;
