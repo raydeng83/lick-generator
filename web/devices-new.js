@@ -366,7 +366,7 @@ window.DevicesNew = (function () {
   /**
    * Neighbor/Enclosure Device
    * Creates two enclosure patterns per measure
-   * Structure: Target → Fill(2) → Enclosure(2) → Target → Enclosure(2)
+   * Structure: Target → Fill(1) → Enclosure(2) → Target → Fill(1) → Enclosure(2)
    * Enclosure uses both lower (chromatic) and upper (diatonic) neighbors
    */
   function generateNeighborEnclosure(context) {
@@ -391,35 +391,33 @@ window.DevicesNew = (function () {
       scaleName: scale,
     });
 
-    // Slots 1-2: Fill pattern (2 notes with scale steps)
+    // Slot 1: Fill note (1 note with scale step)
     let currentMidi = targetNote.midi;
-    for (let i = 1; i <= 2; i++) {
-      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+    currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
 
-      // Check if this scale-step note accidentally lands on a chord tone
-      const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
+    // Check if this scale-step note accidentally lands on a chord tone
+    const isChordToneNote1 = isChordTone(currentMidi, rootPc, chordPcs);
 
-      notes.push({
-        startBeat: measureStart + i * 0.5,
-        durationBeats: 0.5,
-        midi: currentMidi,
-        velocity: 0.9,
-        device: 'enclosure-fill',
-        chordSymbol: chord.symbol,
-        rootPc,
-        quality,
-        scaleName: scale,
-        ruleId: isChordToneNote ? 'chord-tone' : 'scale-step',
-        harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
-      });
-    }
+    notes.push({
+      startBeat: measureStart + 0.5,
+      durationBeats: 0.5,
+      midi: currentMidi,
+      velocity: 0.9,
+      device: 'enclosure-fill',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+      ruleId: isChordToneNote1 ? 'chord-tone' : 'scale-step',
+      harmonicFunction: isChordToneNote1 ? 'chord-tone' : 'scale-step',
+    });
 
-    // Slot 5: Middle target note (chord tone)
+    // Slot 4: Middle target note (chord tone) - the 5th note of the measure
     // Select a chord tone for the middle target
     const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
     const middleTargetMidi = selectChordTone(currentMidi, chordAbs);
 
-    // Slots 3-4: First enclosure approaching middle target (slot 5)
+    // Slots 2-3: First enclosure approaching middle target (slot 4)
     const lowerNeighbor1 = middleTargetMidi - 1;
     const upperNeighbor1 = getUpperNeighbor(middleTargetMidi, rootPc, scalePcs);
     const enclosureType1 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
@@ -429,7 +427,7 @@ window.DevicesNew = (function () {
     const lowerIsChordTone1 = isChordTone(lowerNeighbor1, rootPc, chordPcs);
 
     notes.push({
-      startBeat: measureStart + 1.5,
+      startBeat: measureStart + 1.0,
       durationBeats: 0.5,
       midi: enclosureType1 === 'upper-lower' ? upperNeighbor1 : lowerNeighbor1,
       velocity: 0.9,
@@ -446,7 +444,7 @@ window.DevicesNew = (function () {
     });
 
     notes.push({
-      startBeat: measureStart + 2,
+      startBeat: measureStart + 1.5,
       durationBeats: 0.5,
       midi: enclosureType1 === 'upper-lower' ? lowerNeighbor1 : upperNeighbor1,
       velocity: 0.9,
@@ -462,9 +460,9 @@ window.DevicesNew = (function () {
         : (upperIsChordTone1 ? 'chord-tone' : 'scale-step'),
     });
 
-    // Slot 5: Middle target
+    // Slot 4: Middle target
     notes.push({
-      startBeat: measureStart + 2.5,
+      startBeat: measureStart + 2.0,
       durationBeats: 0.5,
       midi: middleTargetMidi,
       velocity: 0.9,
@@ -475,6 +473,27 @@ window.DevicesNew = (function () {
       scaleName: scale,
       ruleId: 'chord-tone',
       harmonicFunction: 'chord-tone',
+    });
+
+    // Slot 5: Fill note (1 note with scale step)
+    currentMidi = middleTargetMidi;
+    currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+
+    // Check if this scale-step note accidentally lands on a chord tone
+    const isChordToneNote2 = isChordTone(currentMidi, rootPc, chordPcs);
+
+    notes.push({
+      startBeat: measureStart + 2.5,
+      durationBeats: 0.5,
+      midi: currentMidi,
+      velocity: 0.9,
+      device: 'enclosure-fill',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+      ruleId: isChordToneNote2 ? 'chord-tone' : 'scale-step',
+      harmonicFunction: isChordToneNote2 ? 'chord-tone' : 'scale-step',
     });
 
     // Slots 6-7: Second enclosure approaching next measure's target
@@ -490,7 +509,7 @@ window.DevicesNew = (function () {
     const lowerIsChordTone2 = isChordTone(lowerNeighbor2, rootPc, chordPcs);
 
     notes.push({
-      startBeat: measureStart + 3,
+      startBeat: measureStart + 3.0,
       durationBeats: 0.5,
       midi: enclosureType2 === 'upper-lower' ? upperNeighbor2 : lowerNeighbor2,
       velocity: 0.9,
