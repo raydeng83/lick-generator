@@ -150,6 +150,15 @@ window.Devices = (function () {
       case 'scale-focused':
         deviceType = 'scale-run';
         break;
+      case 'neighbor-enclosure':
+        // Focus on neighbor and enclosure devices
+        const neighborEnclosureDevices = availableDevices.filter(d => d === 'neighbor' || d === 'enclosure');
+        if (neighborEnclosureDevices.length > 0) {
+          deviceType = neighborEnclosureDevices[Math.floor(Math.random() * neighborEnclosureDevices.length)];
+        } else {
+          deviceType = 'chord-tones'; // Fallback
+        }
+        break;
       case 'varied':
       default:
         // Random selection with weights
