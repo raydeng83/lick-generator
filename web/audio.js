@@ -88,15 +88,20 @@ window.AudioEngine = (function () {
     return `${bar}:${beatInBar}:${sixteenths}`;
   }
 
-  function beatsToDur(beats) {
+  function beatsToDur(beats, tempo) {
+    // For standard note durations, use musical notation
     if (Math.abs(beats - 0.5) < 1e-6) return "8n";
     if (Math.abs(beats - 1) < 1e-6) return "4n";
     if (Math.abs(beats - 2) < 1e-6) return "2n";
     if (Math.abs(beats - 4) < 1e-6) return "1n";
-    return `${beats * 0.5}n`; // fallback
+
+    // For non-standard durations (swing), convert to seconds
+    // Duration in seconds = (beats / tempo) * 60
+    const seconds = (beats / tempo) * 60;
+    return seconds.toFixed(4); // Return as string "0.2500" etc
   }
 
-  function scheduleLick(lick) {
+  function scheduleLick(lick, tempo) {
     // Clear previous scheduled events
     Tone.Transport.cancel();
     if (state.part) { state.part.dispose(); state.part = null; }
@@ -104,7 +109,7 @@ window.AudioEngine = (function () {
     const events = lick.map(n => ({
       time: beatsToMusicTime(n.startBeat),
       note: n.midi,
-      dur: beatsToDur(n.durationBeats),
+      dur: beatsToDur(n.durationBeats, tempo),
       vel: n.velocity ?? 0.9,
     }));
     state.part = new Tone.Part((time, ev) => {
@@ -239,10 +244,11 @@ window.AudioEngine = (function () {
     console.log('[AudioEngine] Tone.js started, context state:', Tone.context.state);
     Tone.Transport.stop();
     Tone.Transport.cancel();
-    Tone.Transport.bpm.value = metadata.tempo || 120;
+    const tempo = metadata.tempo || 120;
+    Tone.Transport.bpm.value = tempo;
     Tone.Transport.timeSignature = 4;
 
-    scheduleLick(lick);
+    scheduleLick(lick, tempo);
     scheduleChords(progression, chords);
     scheduleMetronome(metronome);
 
