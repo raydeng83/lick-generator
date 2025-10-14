@@ -103,14 +103,41 @@ window.LickGen = (function () {
   }
 
   /**
-   * Convert MIDI number to note name (e.g., 60 -> "C4", 61 -> "C#4")
-   * Always uses sharps for simplicity
+   * Convert MIDI number to note name with proper enharmonic spelling
+   * Uses sharps or flats based on the key signature
+   * @param {number} midi - MIDI note number
+   * @param {number} rootPc - Root pitch class (0-11), optional
+   * @returns {string} Note name with octave (e.g., "C4", "Bb3", "F#5")
    */
-  function midiToNoteName(midi) {
-    const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  function midiToNoteName(midi, rootPc = null) {
     const octave = Math.floor(midi / 12) - 1;
-    const noteName = noteNames[midi % 12];
-    return `${noteName}${octave}`;
+    const pc = midi % 12;
+
+    // If no root provided, default to sharps
+    if (rootPc === null) {
+      const sharpNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      return `${sharpNames[pc]}${octave}`;
+    }
+
+    // Determine if key uses sharps or flats based on root
+    // Sharp keys: G(7), D(2), A(9), E(4), B(11), F#(6), C#(1)
+    // Flat keys: F(5), Bb(10), Eb(3), Ab(8), Db(1), Gb(6)
+    // Note: C(0) is neutral, can use either
+
+    const sharpKeys = [7, 2, 9, 4, 11, 6]; // G, D, A, E, B, F#
+    const flatKeys = [5, 10, 3, 8]; // F, Bb, Eb, Ab
+
+    const useFlats = flatKeys.includes(rootPc);
+    const useSharps = sharpKeys.includes(rootPc) || rootPc === 0; // C major uses sharps by default
+
+    // For ambiguous cases (Db/C#, Gb/F#), prefer flats if not in sharp keys
+    if (useFlats) {
+      const flatNames = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+      return `${flatNames[pc]}${octave}`;
+    } else {
+      const sharpNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      return `${sharpNames[pc]}${octave}`;
+    }
   }
 
   // ========== PHASE 1: PRE-FILL TARGETS ==========
@@ -165,7 +192,7 @@ window.LickGen = (function () {
         ...measure,
         targetNote: {
           midi: targetMidi,
-          noteName: midiToNoteName(targetMidi),
+          noteName: midiToNoteName(targetMidi, measure.rootPc),
           degree,
           startBeat: measure.measureStart,
           durationBeats: 0.5,
@@ -297,7 +324,7 @@ window.LickGen = (function () {
         startBeat: measureStart + i * 0.5,
         durationBeats: 0.5,
         midi: currentMidi,
-        noteName: midiToNoteName(currentMidi),
+        noteName: midiToNoteName(currentMidi, rootPc),
         velocity: 0.9,
         ruleId: 'scale-step',
         harmonicFunction: 'scale-step',
@@ -323,7 +350,7 @@ window.LickGen = (function () {
 
       // Add note name if missing
       if (!updatedNote.noteName && updatedNote.midi !== undefined) {
-        updatedNote.noteName = midiToNoteName(updatedNote.midi);
+        updatedNote.noteName = midiToNoteName(updatedNote.midi, updatedNote.rootPc);
       }
 
       // Add degree for notes that don't have it (if not already present)
