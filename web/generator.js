@@ -21,11 +21,22 @@ window.LickGen = (function () {
     const rest = sym.replace(/^([A-Ga-g][b#]?)/, "");
 
     // Parse with extensions for scale selection
-    // Check specific extended chords first (most specific to least specific)
+    // IMPORTANT: Check minor chords BEFORE major chords to avoid false matches
+    // (maj7 with case-insensitive flag matches m7!)
+
+    // Minor chords first
+    if (/(m7b5|ø)/i.test(rest)) return "m7b5";
+    if (/(dim|o7)/i.test(rest)) return "dim7";
+    if (/(mMaj7|m\(maj7\)|mM7)/i.test(rest)) return "mMaj7";
+    if (/(m7).*b6/.test(rest)) return "m7b6";
+    if (/(m7|min7|−7|mi7)/i.test(rest)) return "m7";
+
+    // Major chords (after minor to avoid false matches)
     if (/(maj7|Δ|M7).*#11/.test(rest)) return "maj7#11";
     if (/(maj7|Δ|M7).*#5/.test(rest)) return "maj7#5";
-    if (/maj7|Δ|M7/i.test(rest)) return "maj7";
+    if (/(maj7|Δ|M7)/i.test(rest)) return "maj7";
 
+    // Dominant chords
     if (/(7).*alt/i.test(rest)) return "7alt";
     if (/(7).*#9.*b13/.test(rest)) return "7#9b13";
     if (/(7).*#11/.test(rest)) return "7#11";
@@ -36,13 +47,11 @@ window.LickGen = (function () {
     if (/(7sus4).*b9/.test(rest)) return "7sus4b9";
     if (/(7)/.test(rest)) return "7";
 
-    if (/(m7b5|ø)/i.test(rest)) return "m7b5";
-    if (/(dim|o7)/i.test(rest)) return "dim7";
-    if (/(mMaj7|m\(maj7\)|mM7)/i.test(rest)) return "mMaj7";
-    if (/(m7).*b6/.test(rest)) return "m7b6";
-    if (/(m7|min7|−7|mi7|m)/i.test(rest)) return "m7";
-
+    // Sus chords
     if (/sus4.*b9/.test(rest)) return "sus4b9";
+
+    // Bare "m" for minor triads/chords
+    if (/(^m$|^min$|^mi$|^−$)/i.test(rest)) return "m7";
 
     return "maj7";
   }
@@ -286,8 +295,8 @@ window.LickGen = (function () {
 
       const device = measureSlots[0].device;
 
-      // Realize this measure using the device as a guide
-      const measureNotes = realizeMeasureWithDevice(measureSlots, device, lastMidi, range);
+      // Pass full phrase and measure start so device can look ahead to next measure if needed
+      const measureNotes = realizeMeasureWithDevice(measureSlots, device, lastMidi, range, functionalPhrase, measureStart);
 
       for (const note of measureNotes) {
         result.push(note);
@@ -298,7 +307,7 @@ window.LickGen = (function () {
     return result;
   }
 
-  function realizeMeasureWithDevice(slots, device, startMidi, range) {
+  function realizeMeasureWithDevice(slots, device, startMidi, range, fullPhrase = null, measureStart = 0) {
     if (!device || device.type === 'chord-tones') {
       // No device - use Rules 1-4 for each slot
       let lastMidi = startMidi;
@@ -449,12 +458,15 @@ window.LickGen = (function () {
               ? getUpperNeighbor(target.midi, slot.rootPc, scalePcs)
               : getLowerNeighbor(target.midi);
 
+            // Upper neighbor is scale tone (diatonic), lower neighbor is chromatic
+            const harmonicFunction = neighborType === 'upper' ? 'scale-step' : 'chromatic';
+
             result.push({
               ...slot,
               midi: neighborMidi,
               velocity: 0.9,
               ruleId: 'neighbor',
-              harmonicFunction: 'scale-step',
+              harmonicFunction: harmonicFunction,
               degree: null,
             });
             lastMidi = neighborMidi;
@@ -493,9 +505,21 @@ window.LickGen = (function () {
           const slot = slots[i];
           const isStrongBeat = (slot.slot % 4 === 0);
 
-          if (isStrongBeat && i >= 2 && !enclosureSlots.has(i-1) && !enclosureSlots.has(i-2)) {
-            enclosureSlots.add(i - 2); // Two slots before
-            enclosureSlots.add(i - 1); // One slot before
+          // Apply enclosure to BOTH strong beats (slots 0 and 4)
+          // For slot 0: use slots 6-7 from previous measure (end of this measure approaches next measure)
+          // For slot 4: use slots 2-3
+          if (isStrongBeat) {
+            if (i === 0 && slots.length >= 8 && fullPhrase && measureStart + 8 < fullPhrase.length) {
+              // First beat: enclosure comes from end of measure (slots 6-7 approach slot 0 of NEXT measure)
+              // Only add enclosure if there IS a next measure
+              // Mark last two slots to approach first beat of NEXT measure
+              enclosureSlots.add(slots.length - 2); // slot 6
+              enclosureSlots.add(slots.length - 1); // slot 7
+            } else if (i >= 2 && !enclosureSlots.has(i-1) && !enclosureSlots.has(i-2)) {
+              // Other strong beats: use previous two slots
+              enclosureSlots.add(i - 2);
+              enclosureSlots.add(i - 1);
+            }
           }
         }
 
@@ -508,27 +532,57 @@ window.LickGen = (function () {
             // This slot is part of an enclosure approaching a strong beat
             // Determine if this is the first or second approach note
             const isFirstApproach = enclosureSlots.has(i + 1);
-            const targetSlot = isFirstApproach ? slots[i + 2] : slots[i + 1];
-            const target = resolveChordTone(targetSlot, lastMidi);
 
-            // Calculate both neighbor tones
-            const scalePcs = scalePitchClasses(slot.rootPc, slot.quality, slot.scaleName);
-            const upperNeighbor = getUpperNeighbor(target.midi, slot.rootPc, scalePcs);
-            const lowerNeighbor = getLowerNeighbor(target.midi);
+            // Determine target slot
+            let targetSlot;
+            if (i >= slots.length - 2 && fullPhrase && measureStart + 8 < fullPhrase.length) {
+              // End of measure (slots 6-7): target is first slot of NEXT measure
+              targetSlot = fullPhrase[measureStart + 8];
+            } else {
+              // Within measure: target is i+1 or i+2
+              targetSlot = isFirstApproach ? slots[i + 2] : slots[i + 1];
+            }
+
+            const target = resolveChordTone(targetSlot, lastMidi);
 
             // Determine which neighbor to use based on enclosure type and position
             const enclosureType = device.enclosureType || 'upper-lower';
+
+            // Calculate both neighbor tones
+            // IMPORTANT: Use the TARGET slot's scale for neighbor calculation (Rule 8)
+            // When approaching next measure, use the next chord's scale, not current chord's scale
+            const scalePcs = scalePitchClasses(targetSlot.rootPc, targetSlot.quality, targetSlot.scaleName);
+            const upperNeighbor = getUpperNeighbor(target.midi, targetSlot.rootPc, scalePcs);
+            const lowerNeighbor = getLowerNeighbor(target.midi);
+
+            // Debug logging
+            if (i >= slots.length - 2) {
+              console.log('[Enclosure Debug]');
+              console.log('  Current slot i:', i, 'chord:', slot.chordSymbol);
+              console.log('  Target slot chord:', targetSlot.chordSymbol, 'at beat:', targetSlot.startBeat);
+              console.log('  Target MIDI:', target.midi, 'degree:', target.degree);
+              console.log('  Upper neighbor:', upperNeighbor);
+              console.log('  Lower neighbor:', lowerNeighbor);
+              console.log('  Enclosure type:', enclosureType);
+              console.log('  Is first approach:', isFirstApproach);
+            }
+
             let neighborMidi;
             let ruleId;
 
+            let harmonicFunction;
             if (isFirstApproach) {
               // First approach note
               neighborMidi = enclosureType === 'upper-lower' ? upperNeighbor : lowerNeighbor;
               ruleId = enclosureType === 'upper-lower' ? 'enclosure-upper' : 'enclosure-lower';
+              // Upper neighbor is scale tone (diatonic), lower neighbor is chromatic
+              harmonicFunction = enclosureType === 'upper-lower' ? 'scale-step' : 'chromatic';
             } else {
               // Second approach note
               neighborMidi = enclosureType === 'upper-lower' ? lowerNeighbor : upperNeighbor;
               ruleId = enclosureType === 'upper-lower' ? 'enclosure-lower' : 'enclosure-upper';
+              // Lower neighbor is chromatic, upper neighbor is scale tone (diatonic)
+              harmonicFunction = enclosureType === 'upper-lower' ? 'chromatic' : 'scale-step';
             }
 
             result.push({
@@ -536,7 +590,7 @@ window.LickGen = (function () {
               midi: neighborMidi,
               velocity: 0.9,
               ruleId: ruleId,
-              harmonicFunction: 'scale-step',
+              harmonicFunction: harmonicFunction,
               degree: null,
             });
             lastMidi = neighborMidi;

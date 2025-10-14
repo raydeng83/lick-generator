@@ -86,6 +86,11 @@ window.Notate = (function () {
       // Build exactly 8 eighth-note slots (4/4) using integer eighths to avoid float drift
       const notes = [];
       let cursorE8 = 0; // 0..8
+
+      // Track which accidentals have been shown in this measure
+      // Key format: "c4", "d5", etc (pitch class + octave)
+      const accidentalsInMeasure = new Set();
+
       for (const n of segNotes) {
         // Safety check: ensure note has required properties
         if (!n || typeof n.midi !== 'number' || typeof n.durationBeats !== 'number') {
@@ -113,10 +118,76 @@ window.Notate = (function () {
 
         const sn = new VF.StaveNote({ keys: [key], duration: dur, auto_stem: true });
 
+        // Add accidentals following standard notation rules:
+        // - Only show accidental if it hasn't been shown yet in this measure
+        // - Accidentals carry through the measure for the same pitch+octave
+        const hasSharp = key.includes('#');
+        const hasFlat = key.includes('b');
+
+        if (hasSharp || hasFlat) {
+          const pitchKey = key; // e.g., "c#/4" or "bb/5"
+
+          if (!accidentalsInMeasure.has(pitchKey)) {
+            // First occurrence of this pitch in the measure - show accidental
+            if (hasSharp) {
+              sn.addAccidental(0, new VF.Accidental('#'));
+            } else if (hasFlat) {
+              sn.addAccidental(0, new VF.Accidental('b'));
+            }
+            accidentalsInMeasure.add(pitchKey);
+          }
+          // Subsequent occurrences: no accidental needed (carries through measure)
+        }
+
+        // Calculate scale degree for display (for scale tones)
+        let scaleDegree = null;
+        if (n.harmonicFunction === 'scale-step' || n.ruleId === 'scale-step' ||
+            n.ruleId === 'scale-run' || n.ruleId === 'melodic-cell' ||
+            n.ruleId === 'neighbor' || n.ruleId === 'enclosure-upper' || n.ruleId === 'enclosure-lower') {
+          // For neighbor and enclosure notes, check if they're actually scale tones (not chromatic)
+          if (n.harmonicFunction === 'chromatic') {
+            // Chromatic notes (lower neighbor) don't get scale degree
+            scaleDegree = null;
+          } else {
+            // Calculate which scale degree this is
+            if (n.midi !== undefined && n.rootPc !== undefined && n.scaleName && window.Scales) {
+              const pc = (n.midi % 12 + 12) % 12;
+              const relPc = (pc - n.rootPc + 12) % 12;
+              const scalePcs = window.Scales.getScalePitchClasses(n.rootPc, n.scaleName);
+              const scaleIndex = scalePcs.indexOf(relPc);
+              if (scaleIndex !== -1) {
+                scaleDegree = String(scaleIndex + 1); // 1-indexed
+              } else {
+                // Debug: note is marked as scale-step but not in scale
+                console.log('[Notate] Scale degree not found:', {
+                  midi: n.midi,
+                  pc: pc,
+                  relPc: relPc,
+                  rootPc: n.rootPc,
+                  scaleName: n.scaleName,
+                  scalePcs: scalePcs,
+                  harmonicFunction: n.harmonicFunction,
+                  ruleId: n.ruleId
+                });
+              }
+            } else {
+              // Debug: missing required data
+              console.log('[Notate] Missing data for scale degree calculation:', {
+                midi: n.midi,
+                rootPc: n.rootPc,
+                scaleName: n.scaleName,
+                harmonicFunction: n.harmonicFunction,
+                ruleId: n.ruleId,
+                note: n
+              });
+            }
+          }
+        }
+
         // Color code notes by harmonic function
         if (n.harmonicFunction === 'chord-tone' || n.ruleId === 'chord-tone' ||
             n.ruleId === 'arpeggio-chord-tone' || n.ruleId === 'scale-run-chord-tone') {
-          // Chord tones: Blue (includes targets from neighbor/enclosure devices)
+          // Chord tones: Blue
           sn.setStyle({ fillStyle: '#4cc3ff', strokeStyle: '#4cc3ff' });
 
           // Add degree annotation below the note
@@ -127,9 +198,26 @@ window.Notate = (function () {
               .setVerticalJustification(VF.Annotation.VerticalJustify.BOTTOM);
             sn.addAnnotation(0, degreeAnn);
           }
-        } else {
-          // Scale tones and devices: Green
+        } else if (n.harmonicFunction === 'scale-step' || n.ruleId === 'scale-step' ||
+                   n.ruleId === 'scale-run' || n.ruleId === 'melodic-cell' ||
+                   (n.ruleId === 'neighbor' && n.harmonicFunction === 'scale-step') ||
+                   (n.ruleId === 'enclosure-upper' && n.harmonicFunction === 'scale-step') ||
+                   (n.ruleId === 'enclosure-lower' && n.harmonicFunction === 'scale-step')) {
+          // Scale tones: Green (notes in the scale)
           sn.setStyle({ fillStyle: '#34c759', strokeStyle: '#34c759' });
+
+          // Add scale degree annotation below the note
+          if (scaleDegree) {
+            const degreeAnn = new VF.Annotation(scaleDegree)
+              .setFont('Arial', 11, 'bold')
+              .setJustification(VF.Annotation.Justify.CENTER)
+              .setVerticalJustification(VF.Annotation.VerticalJustify.BOTTOM);
+            sn.addAnnotation(0, degreeAnn);
+          }
+        } else {
+          // Chromatic/device notes (outside scale): Black
+          // This includes chromatic approach notes like lower neighbor
+          sn.setStyle({ fillStyle: '#000000', strokeStyle: '#000000' });
         }
 
         notes.push(sn);
