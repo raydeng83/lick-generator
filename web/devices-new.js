@@ -10,6 +10,7 @@ window.DevicesNew = (function () {
    * Arpeggio Device
    * Generates 3-4 note arpeggio patterns (straight up/down or pivot)
    * Last note must be within 2 semitones of next target
+   * For last measure: mixes arpeggios with scale steps for variety
    */
   function generateArpeggio(context) {
     const { chord, rootPc, quality, scale, targetNote, nextTarget, isLastMeasure } = context;
@@ -25,6 +26,35 @@ window.DevicesNew = (function () {
       quality,
       scaleName: scale,
     });
+
+    // For last measure, use scale run instead of pure arpeggio
+    if (isLastMeasure && window.Scales) {
+      const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
+      const chordPcs = getChordPitchClasses(rootPc, quality);
+      const direction = Math.random() < 0.5 ? 1 : -1;
+      let currentMidi = targetNote.midi;
+
+      for (let i = 1; i < 7; i++) {
+        currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, direction);
+        const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
+
+        notes.push({
+          startBeat: measureStart + i * 0.5,
+          durationBeats: 0.5,
+          midi: currentMidi,
+          velocity: 0.9,
+          device: 'arpeggio',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
+          ruleId: isChordToneNote ? 'arpeggio' : 'scale-step',
+          harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
+        });
+      }
+
+      return notes;
+    }
 
     // Get chord tones
     const chordPcs = getChordPitchClasses(rootPc, quality);
