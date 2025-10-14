@@ -39,6 +39,7 @@ window.Notate = (function () {
   }
 
   function render({ container, progression, lick, metadata, useColors = true }) {
+    console.log('[Notate] Rendering with useColors:', useColors);
     const el = typeof container === "string" ? document.querySelector(container) : container;
     if (!el) return;
     el.innerHTML = "";
@@ -191,6 +192,7 @@ window.Notate = (function () {
             n.ruleId === 'arpeggio-chord-tone' || n.ruleId === 'scale-run-chord-tone') {
           // Chord tones: Blue (or black if colors disabled)
           const color = useColors ? '#4cc3ff' : '#000000';
+          console.log('[Notate] Chord tone - useColors:', useColors, 'color:', color);
           sn.setStyle({ fillStyle: color, strokeStyle: color });
 
           // Add degree annotation below the note

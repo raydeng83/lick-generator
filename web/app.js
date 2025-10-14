@@ -44,11 +44,19 @@
   updateSwingDisplay();
 
   // Re-render notation when color toggle changes
-  ui.coloredNotes.addEventListener("change", () => {
-    if (lastModel) {
-      renderAll(lastModel);
-    }
-  });
+  if (ui.coloredNotes) {
+    ui.coloredNotes.addEventListener("change", () => {
+      console.log('[App] Color toggle changed, checked:', ui.coloredNotes.checked);
+      if (lastModel) {
+        console.log('[App] Re-rendering with colors:', ui.coloredNotes.checked);
+        renderAll(lastModel);
+      } else {
+        console.log('[App] No model to re-render');
+      }
+    });
+  } else {
+    console.error('[App] coloredNotes element not found');
+  }
 
   let lastModel = null;
 
