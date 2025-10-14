@@ -45,6 +45,18 @@
             </select>
           </div>
           <div class="field">
+            <label for="deviceStrategy">Device Strategy</label>
+            <select id="deviceStrategy">
+              <option value="disabled">Disabled (Rules 1-4)</option>
+              <option value="varied">Varied Devices</option>
+              <option value="cell-focused">Cell-Focused (Rule 5)</option>
+              <option value="arpeggio-focused">Arpeggio-Focused</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
             <label>&nbsp;</label>
             <label class="inline"><input id="metronome" type="checkbox" /> Metronome</label>
             <label class="inline"><input id="chords" type="checkbox" checked /> Chords</label>
@@ -82,6 +94,8 @@
 
     <script src="./schema.js"></script>
     <script src="./scales.js"></script>
+    <script src="./melodic-cells.js"></script>
+    <script src="./devices.js"></script>
     <script src="./generator.js"></script>
     <script src="./notate.js"></script>
     <script src="./audio.js"></script>

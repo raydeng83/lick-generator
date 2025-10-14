@@ -9,6 +9,7 @@
     tempo: $("#tempo"),
     instrument: $("#instrument"),
     scaleStrategy: $("#scaleStrategy"),
+    deviceStrategy: $("#deviceStrategy"),
     metronome: $("#metronome"),
     chords: $("#chords"),
     generate: $("#generate"),
@@ -32,9 +33,12 @@
     meta.tempo = parseInt(ui.tempo.value || "120", 10) || 120;
     const { progression, bars } = Schema.parseProgression(ui.progression.value);
 
-    // Pass scale strategy to generator
+    // Pass scale and device strategies to generator
+    const deviceStrategyValue = ui.deviceStrategy.value || 'disabled';
     const options = {
-      scaleStrategy: ui.scaleStrategy.value || 'default'
+      scaleStrategy: ui.scaleStrategy.value || 'default',
+      deviceStrategy: deviceStrategyValue,
+      useDevices: deviceStrategyValue !== 'disabled'
     };
 
     const lick = LickGen.generateLick(progression, meta, options);

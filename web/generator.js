@@ -140,6 +140,62 @@ window.LickGen = (function () {
     return skeleton;
   }
 
+  // ========== PIPELINE STAGE 1.5: DEVICE SELECTION ==========
+
+  function selectDevices(skeleton, progression, options = {}) {
+    const { deviceStrategy = 'varied', useDevices = false } = options;
+
+    // If devices disabled or not loaded, return skeleton unchanged
+    if (!useDevices || !window.Devices) {
+      return skeleton;
+    }
+
+    try {
+      // Select device per measure
+      const result = [...skeleton];
+      const measuresProcessed = new Set();
+
+      for (let i = 0; i < result.length; i += 8) { // Process 8 slots (1 measure) at a time
+        const measureStart = i;
+        const measureEnd = Math.min(i + 8, result.length);
+
+        if (!result[measureStart]) continue;
+
+        const bar = result[measureStart].bar;
+
+        if (measuresProcessed.has(bar)) continue;
+        measuresProcessed.add(bar);
+
+        // Get chord for this measure
+        const seg = progression.find(s =>
+          result[measureStart].startBeat >= s.startBeat &&
+          result[measureStart].startBeat < s.startBeat + s.durationBeats
+        ) || progression[0];
+
+        const slotsAvailable = measureEnd - measureStart;
+
+        // Select device
+        const device = window.Devices.selectDevice({
+          chord: seg,
+          slotsAvailable,
+        }, { deviceStrategy });
+
+        // Tag slots with device info
+        for (let j = measureStart; j < measureEnd; j++) {
+          if (result[j]) {
+            result[j].device = device;
+          }
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error('[Generator] Error in selectDevices:', error);
+      // Return skeleton unchanged if error occurs
+      return skeleton;
+    }
+  }
+
   // ========== PIPELINE STAGE 2: HARMONIC FUNCTION ASSIGNMENT ==========
 
   function assignHarmonicFunctions(skeleton, progression, options = {}) {
@@ -306,20 +362,37 @@ window.LickGen = (function () {
   // ========== MAIN GENERATOR ==========
 
   function generateLick(progression, metadata, options = {}) {
+    console.log('[Generator] Starting generation with options:', options);
+
     // Stage 1: Generate rhythmic skeleton
     const skeleton = generateRhythmicSkeleton(progression, metadata, options);
+    console.log('[Generator] Stage 1 complete: skeleton has', skeleton.length, 'slots');
 
-    // Stage 2: Assign harmonic functions (with strategy selection)
+    // Stage 1.5: Select devices (NEW - Step 2 from Generation-Steps)
+    const devicePlanned = selectDevices(skeleton, progression, options);
+    console.log('[Generator] Stage 1.5 complete: devices selected');
+
+    // Stage 2: Assign harmonic functions (device-aware)
     const strategy = selectGenerationStrategy(progression, metadata);
     // Merge user options with strategy
     const mergedOptions = { ...strategy, ...options };
-    const functionalPhrase = assignHarmonicFunctions(skeleton, progression, mergedOptions);
+    const functionalPhrase = assignHarmonicFunctions(devicePlanned, progression, mergedOptions);
+    console.log('[Generator] Stage 2 complete: harmonic functions assigned');
 
     // Stage 3: Realize pitches
     const phrase = realizePitches(functionalPhrase, options);
+    console.log('[Generator] Stage 3 complete: pitches realized');
+    console.log('[Generator] Generated', phrase.length, 'notes');
+
+    // Validate output
+    const invalidNotes = phrase.filter(n => !n || typeof n.midi !== 'number');
+    if (invalidNotes.length > 0) {
+      console.error('[Generator] Found', invalidNotes.length, 'invalid notes:', invalidNotes);
+    }
 
     // Stage 4: Post-process
     const final = postProcess(phrase, options);
+    console.log('[Generator] Stage 4 complete: post-processing done');
 
     return final;
   }

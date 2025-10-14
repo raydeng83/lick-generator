@@ -87,14 +87,31 @@ window.Notate = (function () {
       const notes = [];
       let cursorE8 = 0; // 0..8
       for (const n of segNotes) {
+        // Safety check: ensure note has required properties
+        if (!n || typeof n.midi !== 'number' || typeof n.durationBeats !== 'number') {
+          console.error('[Notate] Invalid note:', n);
+          continue;
+        }
+
         const relStartE8 = Math.round((n.startBeat - start) * 2);
         const durE8 = Math.round(n.durationBeats * 2);
+
+        // Fill rests up to this note
         while (cursorE8 < relStartE8) {
           notes.push(new VF.StaveNote({ keys: ["b/4"], duration: "8r", auto_stem: true }));
           cursorE8 += 1;
         }
+
         const dur = durationFromBeats(n.durationBeats);
-        const sn = new VF.StaveNote({ keys: [midiToKey(n.midi)], duration: dur, auto_stem: true });
+        const key = midiToKey(n.midi);
+
+        // Validate key format before creating note
+        if (!key || !key.includes('/')) {
+          console.error('[Notate] Invalid MIDI key:', key, 'from MIDI:', n.midi);
+          continue;
+        }
+
+        const sn = new VF.StaveNote({ keys: [key], duration: dur, auto_stem: true });
 
         // Color code notes by harmonic function
         if (n.harmonicFunction === 'chord-tone' || n.ruleId === 'chord-tone') {
@@ -120,56 +137,72 @@ window.Notate = (function () {
         notes.push(sn);
         cursorE8 += durE8;
       }
+
+      // Fill remaining slots with rests
       while (cursorE8 < 8) {
         notes.push(new VF.StaveNote({ keys: ["b/4"], duration: "8r", auto_stem: true }));
         cursorE8 += 1;
       }
 
-      // Place chord symbol and scale name above first pitched note BEFORE formatting/drawing
-      const firstNote = notes.find(n => String(n.getDuration()).indexOf('r') === -1);
-      if (firstNote) {
-        // Add chord symbol
-        const ann = new VF.Annotation(seg.symbol)
-          .setFont('Arial', 12, 'normal')
-          .setJustification(VF.Annotation.Justify.LEFT)
-          .setVerticalJustification(VF.Annotation.VerticalJustify.TOP);
-        firstNote.addAnnotation(0, ann);
+      // Validate all notes before proceeding
+      const validNotes = notes.filter(n => n && typeof n.setContext === 'function');
 
-        // Add scale name below chord symbol (if we have scale info)
-        const firstSegNote = segNotes[0];
-        if (firstSegNote && firstSegNote.scaleName) {
-          const scaleDisplayName = window.Scales ? window.Scales.getScaleDisplayName(firstSegNote.scaleName) : firstSegNote.scaleName;
-          const scaleAnn = new VF.Annotation(scaleDisplayName)
-            .setFont('Arial', 9, 'italic')
-            .setJustification(VF.Annotation.Justify.LEFT)
-            .setVerticalJustification(VF.Annotation.VerticalJustify.TOP);
-          firstNote.addAnnotation(1, scaleAnn);
-        }
+      if (validNotes.length === 0) {
+        console.error('[Notate] No valid notes for measure:', seg.symbol);
+        continue;
       }
 
-      const voice = new VF.Voice({ num_beats: 4, beat_value: 4 }).setStrict(true);
-      voice.addTickables(notes);
-      const formatter = new VF.Formatter().joinVoices([voice]);
-      // Fit strictly within note area between left and right barlines
-      const noteArea = Math.max(10, (stave.getNoteEndX() - stave.getNoteStartX()) - 8);
-      formatter.format([voice], noteArea);
-      // Beam eighths within each beat (quarter grouping)
-      const beams = VF.Beam.generateBeams(notes, {
-        groups: [new VF.Fraction(1, 4)],
-        beam_rests: false,
-        maintain_stem_directions: false,
-      });
-      voice.draw(ctx, stave);
-      beams.forEach(b => b.setContext(ctx).draw());
+      try {
+        console.log('[Notate] Creating voice with', validNotes.length, 'notes for measure:', seg.symbol);
 
-      if (!firstNote) {
-        // Fallback: draw text at start if no pitched notes
-        const text = new VF.TextNote({ text: seg.symbol, duration: "w" })
-          .setJustification(VF.TextNote.Justification.LEFT)
-          .setLine(0);
-        const v2 = new VF.Voice({ num_beats: 4, beat_value: 4 }).addTickables([text]);
-        new VF.Formatter().joinVoices([v2]).format([v2], 0);
-        v2.draw(ctx, stave);
+        const voice = new VF.Voice({ num_beats: 4, beat_value: 4 }).setStrict(true);
+        voice.addTickables(validNotes);
+
+        const formatter = new VF.Formatter().joinVoices([voice]);
+        // Fit strictly within note area between left and right barlines
+        const noteArea = Math.max(10, (stave.getNoteEndX() - stave.getNoteStartX()) - 8);
+        formatter.format([voice], noteArea);
+
+        // Beam eighths within each beat (quarter grouping)
+        const beams = VF.Beam.generateBeams(validNotes, {
+          groups: [new VF.Fraction(1, 4)],
+          beam_rests: false,
+          maintain_stem_directions: false,
+        });
+
+        console.log('[Notate] Drawing voice...');
+        voice.draw(ctx, stave);
+
+        console.log('[Notate] Drawing', beams.length, 'beams...');
+        // Filter out any null/undefined beams before drawing
+        beams.filter(b => b).forEach(b => b.setContext(ctx).draw());
+
+        console.log('[Notate] Measure rendered successfully');
+
+        // Draw chord symbol and scale name as text above the stave (after voice is drawn)
+        try {
+          ctx.save();
+          ctx.setFont('Arial', 12, 'normal');
+          ctx.fillStyle = '#111827';
+          ctx.fillText(seg.symbol, stave.getNoteStartX() + 5, y - 10);
+
+          // Draw scale name below chord symbol if available
+          const firstSegNote = segNotes[0];
+          if (firstSegNote && firstSegNote.scaleName) {
+            const scaleDisplayName = window.Scales ? window.Scales.getScaleDisplayName(firstSegNote.scaleName) : firstSegNote.scaleName;
+            ctx.setFont('Arial', 9, 'italic');
+            ctx.fillStyle = '#6b7280';
+            ctx.fillText(scaleDisplayName, stave.getNoteStartX() + 5, y + 2);
+          }
+          ctx.restore();
+        } catch (error) {
+          console.error('[Notate] Error drawing text labels:', error);
+        }
+      } catch (error) {
+        console.error('[Notate] Error rendering measure:', seg.symbol, error);
+        console.error('[Notate] Valid notes:', validNotes);
+        console.error('[Notate] Lick notes:', segNotes);
+        throw error;
       }
     }
   }

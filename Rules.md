@@ -29,3 +29,12 @@ For major chord, Ionian and Lydian scale can be used.
 
 #Rule 4
 Scale is used to move to the next target chord tone. If the distance between two chord tones are too small or they are the same note, use scale to move either up or down and then come back to hit the next target chord tone.
+
+#Rule 5
+Melodic Structure is small cells of notes to create melody, four note groupings: 1-2-3-5, 1-3-4-5, 5-6-7-9, 5-7-8-9
+
+#Rule 6
+4th is the avoid notes for major scale. Yet, an avoid note is not always forbidden but needs to be handled with care.
+
+#Rule 7
+I chord measure can ends early, in most cases.
