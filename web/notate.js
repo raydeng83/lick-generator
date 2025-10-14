@@ -3,7 +3,26 @@
 window.Notate = (function () {
   const VF = Vex.Flow;
 
-  function midiToKey(midi) {
+  /**
+   * Convert MIDI to VexFlow key format, using noteName if available
+   * @param {number} midi - MIDI note number
+   * @param {string} noteName - Optional note name with octave (e.g., "Bb4", "F#5")
+   * @returns {string} VexFlow key format (e.g., "bb/4", "f#/5")
+   */
+  function midiToKey(midi, noteName = null) {
+    if (noteName) {
+      // Parse noteName (e.g., "Bb4", "F#5", "C4") into VexFlow format
+      // noteName format: [A-G][b|#]?[0-9]
+      const match = noteName.match(/^([A-G])([b#]?)(\d+)$/);
+      if (match) {
+        const note = match[1].toLowerCase();
+        const accidental = match[2]; // 'b', '#', or ''
+        const octave = match[3];
+        return `${note}${accidental}/${octave}`;
+      }
+    }
+
+    // Fallback: use sharps if noteName not available
     const N = ["c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b"];
     const n = N[(midi % 12 + 12) % 12];
     const o = Math.floor(midi / 12) - 1;
@@ -108,7 +127,7 @@ window.Notate = (function () {
         }
 
         const dur = durationFromBeats(n.durationBeats);
-        const key = midiToKey(n.midi);
+        const key = midiToKey(n.midi, n.noteName);
 
         // Validate key format before creating note
         if (!key || !key.includes('/')) {
