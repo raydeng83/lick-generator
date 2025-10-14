@@ -393,7 +393,10 @@ window.DevicesNew = (function () {
 
     // Slot 1: Fill note (1 note with scale step)
     let currentMidi = targetNote.midi;
-    currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+    currentMidi = avoidConsecutiveDuplicate(
+      targetNote.midi,
+      () => nextScaleNote(targetNote.midi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1)
+    );
 
     // Check if this scale-step note accidentally lands on a chord tone
     const isChordToneNote1 = isChordTone(currentMidi, rootPc, chordPcs);
@@ -420,16 +423,25 @@ window.DevicesNew = (function () {
     // Slots 2-3: First enclosure approaching middle target (slot 4)
     const lowerNeighbor1 = middleTargetMidi - 1;
     const upperNeighbor1 = getUpperNeighbor(middleTargetMidi, rootPc, scalePcs);
-    const enclosureType1 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+
+    // Choose enclosure type, but swap if first note would be duplicate
+    let enclosureType1 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+    const firstEnclosureMidi = enclosureType1 === 'upper-lower' ? upperNeighbor1 : lowerNeighbor1;
+
+    // If first enclosure note duplicates the fill note, swap enclosure order
+    if (firstEnclosureMidi === currentMidi) {
+      enclosureType1 = enclosureType1 === 'upper-lower' ? 'lower-upper' : 'upper-lower';
+    }
 
     // Check if neighbors are chord tones
     const upperIsChordTone1 = isChordTone(upperNeighbor1, rootPc, chordPcs);
     const lowerIsChordTone1 = isChordTone(lowerNeighbor1, rootPc, chordPcs);
 
+    const slot2Midi = enclosureType1 === 'upper-lower' ? upperNeighbor1 : lowerNeighbor1;
     notes.push({
       startBeat: measureStart + 1.0,
       durationBeats: 0.5,
-      midi: enclosureType1 === 'upper-lower' ? upperNeighbor1 : lowerNeighbor1,
+      midi: slot2Midi,
       velocity: 0.9,
       device: 'enclosure',
       enclosureType: enclosureType1 === 'upper-lower' ? 'upper' : 'lower',
@@ -461,10 +473,22 @@ window.DevicesNew = (function () {
     });
 
     // Slot 4: Middle target
+    // Check if middle target duplicates slot 3 (last enclosure note)
+    const slot3Midi = enclosureType1 === 'upper-lower' ? lowerNeighbor1 : upperNeighbor1;
+    let finalMiddleTargetMidi = middleTargetMidi;
+
+    if (finalMiddleTargetMidi === slot3Midi) {
+      // Try to find a different chord tone
+      finalMiddleTargetMidi = avoidConsecutiveDuplicate(
+        slot3Midi,
+        () => selectChordTone(currentMidi, chordAbs)
+      );
+    }
+
     notes.push({
       startBeat: measureStart + 2.0,
       durationBeats: 0.5,
-      midi: middleTargetMidi,
+      midi: finalMiddleTargetMidi,
       velocity: 0.9,
       device: 'enclosure-target',
       chordSymbol: chord.symbol,
@@ -476,8 +500,10 @@ window.DevicesNew = (function () {
     });
 
     // Slot 5: Fill note (1 note with scale step)
-    currentMidi = middleTargetMidi;
-    currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+    currentMidi = avoidConsecutiveDuplicate(
+      finalMiddleTargetMidi,
+      () => nextScaleNote(finalMiddleTargetMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1)
+    );
 
     // Check if this scale-step note accidentally lands on a chord tone
     const isChordToneNote2 = isChordTone(currentMidi, rootPc, chordPcs);
@@ -502,7 +528,15 @@ window.DevicesNew = (function () {
 
     const lowerNeighbor2 = nextTargetMidi - 1;
     const upperNeighbor2 = getUpperNeighbor(nextTargetMidi, nextTarget.rootPc || rootPc, nextScalePcs);
-    const enclosureType2 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+
+    // Choose enclosure type, but swap if first note would be duplicate
+    let enclosureType2 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+    const firstEnclosureMidi2 = enclosureType2 === 'upper-lower' ? upperNeighbor2 : lowerNeighbor2;
+
+    // If first enclosure note duplicates the fill note, swap enclosure order
+    if (firstEnclosureMidi2 === currentMidi) {
+      enclosureType2 = enclosureType2 === 'upper-lower' ? 'lower-upper' : 'upper-lower';
+    }
 
     // Check if neighbors are chord tones
     const upperIsChordTone2 = isChordTone(upperNeighbor2, rootPc, chordPcs);
@@ -585,6 +619,35 @@ window.DevicesNew = (function () {
     const pc = (midi % 12 + 12) % 12;
     const relPc = (pc - rootPc + 12) % 12;
     return chordPcs.includes(relPc);
+  }
+
+  /**
+   * Generate a note that avoids being the same as the previous note
+   * @param {number} previousMidi - MIDI of the previous note
+   * @param {function} generateFn - Function that generates a candidate note
+   * @param {number} maxAttempts - Maximum retry attempts (default 3)
+   * @returns {number} MIDI note that's different from previous
+   */
+  function avoidConsecutiveDuplicate(previousMidi, generateFn, maxAttempts = 3) {
+    let attempts = 0;
+    let midi;
+
+    do {
+      midi = generateFn();
+      attempts++;
+    } while (midi === previousMidi && attempts < maxAttempts);
+
+    // If still same after max attempts, force a different note by moving +/-1 semitone
+    if (midi === previousMidi) {
+      // Try moving up first, then down if at range limit
+      if (midi < 81) {
+        midi = previousMidi + 1;
+      } else {
+        midi = previousMidi - 1;
+      }
+    }
+
+    return midi;
   }
 
   // ========== DEVICE SELECTION ==========
