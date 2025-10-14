@@ -10,6 +10,8 @@
     instrument: $("#instrument"),
     scaleStrategy: $("#scaleStrategy"),
     deviceStrategy: $("#deviceStrategy"),
+    swing: $("#swing"),
+    swingValue: $("#swingValue"),
     metronome: $("#metronome"),
     chords: $("#chords"),
     generate: $("#generate"),
@@ -24,6 +26,22 @@
   // Seed example progression
   ui.progression.value = ui.progression.value || "Dm7 | G7 | Cmaj7";
 
+  // Update swing display
+  function updateSwingDisplay() {
+    const value = parseFloat(ui.swing.value);
+    const percent = Math.round(value * 100);
+    if (value === 0) {
+      ui.swingValue.textContent = "0% (Straight)";
+    } else if (value === 0.5) {
+      ui.swingValue.textContent = "50% (Triplet Feel)";
+    } else {
+      ui.swingValue.textContent = `${percent}%`;
+    }
+  }
+
+  ui.swing.addEventListener("input", updateSwingDisplay);
+  updateSwingDisplay();
+
   let lastModel = null;
 
   function setStatus(s) { ui.status.textContent = s; }
@@ -35,10 +53,12 @@
 
     // Pass scale and device strategies to generator
     const deviceStrategyValue = ui.deviceStrategy.value || 'disabled';
+    const swingValue = parseFloat(ui.swing.value) || 0;
     const options = {
       scaleStrategy: ui.scaleStrategy.value || 'default',
       deviceStrategy: deviceStrategyValue,
-      useDevices: deviceStrategyValue !== 'disabled'
+      useDevices: deviceStrategyValue !== 'disabled',
+      swing: swingValue
     };
 
     const lick = LickGen.generateLick(progression, meta, options);

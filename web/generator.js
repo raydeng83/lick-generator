@@ -302,7 +302,67 @@ window.LickGen = (function () {
   // ========== POST-PROCESSING ==========
 
   function postProcess(notes, options = {}) {
-    return notes;
+    const { swing = 0 } = options;
+
+    if (swing === 0) {
+      return notes;
+    }
+
+    // Apply swing timing to eighth notes
+    return applySwing(notes, swing);
+  }
+
+  /**
+   * Apply swing timing to eighth notes
+   * Swing ratio: 0 = straight (1:1), 0.5 = triplet feel (2:1), 1.0 = extreme (3:1)
+   *
+   * For each pair of eighth notes on the beat:
+   * - First note (on-beat): lengthened
+   * - Second note (off-beat): shortened and delayed
+   */
+  function applySwing(notes, swingRatio) {
+    const swung = [];
+
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+      const nextNote = i < notes.length - 1 ? notes[i + 1] : null;
+
+      // Check if this is an eighth note pair (both 0.5 beats)
+      const isEighthNote = note.durationBeats === 0.5;
+      const isOnBeat = isEighthNote && (note.startBeat % 1 === 0); // On whole or half beat
+      const hasNextEighthNote = nextNote && nextNote.durationBeats === 0.5 && nextNote.startBeat === note.startBeat + 0.5;
+
+      if (isOnBeat && hasNextEighthNote) {
+        // This is the first of an eighth note pair - apply swing
+
+        // Calculate swing adjustment
+        // Swing ratio 0.5 = triplet feel (2:1 ratio)
+        // First note gets: 0.5 + (swingRatio * 0.167) beats
+        // Second note gets: 0.5 - (swingRatio * 0.167) beats
+        const swingOffset = swingRatio * (1/6); // 1/6 = 0.167 beats
+
+        // Lengthen first note
+        swung.push({
+          ...note,
+          durationBeats: 0.5 + swingOffset,
+        });
+
+        // Shorten and delay second note
+        swung.push({
+          ...nextNote,
+          startBeat: note.startBeat + 0.5 + swingOffset,
+          durationBeats: 0.5 - swingOffset,
+        });
+
+        // Skip next note since we've already processed it
+        i++;
+      } else {
+        // Not part of a swung pair, keep as-is
+        swung.push(note);
+      }
+    }
+
+    return swung;
   }
 
   // ========== MAIN GENERATOR ==========
