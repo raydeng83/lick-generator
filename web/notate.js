@@ -106,9 +106,10 @@ window.Notate = (function () {
       const notes = [];
       let cursorE8 = 0; // 0..8
 
-      // Track which accidentals have been shown in this measure
-      // Key format: "c4", "d5", etc (pitch class + octave)
-      const accidentalsInMeasure = new Set();
+      // Track accidental state for each pitch letter+octave in this measure
+      // Key: "c4", "d5", etc (pitch letter + octave)
+      // Value: 'sharp', 'flat', 'natural', or null (not seen yet)
+      const accidentalState = new Map();
 
       for (const n of segNotes) {
         // Safety check: ensure note has required properties
@@ -138,27 +139,51 @@ window.Notate = (function () {
         const sn = new VF.StaveNote({ keys: [key], duration: dur, auto_stem: true });
 
         // Add accidentals following standard notation rules:
-        // - Only show accidental if it hasn't been shown yet in this measure
+        // - Show accidental on first occurrence in measure
+        // - Show natural sign if previous note had sharp/flat on same pitch letter
         // - Accidentals carry through the measure for the same pitch+octave
-        // Extract note name (before the slash) to check for accidentals
-        const noteName = key.split('/')[0]; // e.g., "b", "c#", "bb", "eb"
+
+        // Parse the key to extract pitch letter and accidental
+        const keyParts = key.split('/'); // e.g., ["db", "4"] or ["c#", "4"] or ["d", "4"]
+        const noteName = keyParts[0]; // e.g., "db", "c#", "d"
+        const octave = keyParts[1];
+
+        // Extract pitch letter (first character)
+        const pitchLetter = noteName[0]; // e.g., "d", "c"
+        const pitchKey = pitchLetter + octave; // e.g., "d4", "c4"
+
+        // Determine current accidental type
         const hasSharp = noteName.includes('#');
-        const hasFlat = noteName.includes('b') && noteName.length > 1; // "bb" or "eb", but not "b"
+        const hasFlat = noteName.includes('b') && noteName.length > 1; // "bb" or "db", but not "b" (B natural)
+        let currentAccidental = 'natural';
+        if (hasSharp) currentAccidental = 'sharp';
+        if (hasFlat) currentAccidental = 'flat';
 
-        if (hasSharp || hasFlat) {
-          const pitchKey = key; // e.g., "c#/4" or "bb/5"
+        // Check if we need to show an accidental
+        const previousAccidental = accidentalState.get(pitchKey);
 
-          if (!accidentalsInMeasure.has(pitchKey)) {
-            // First occurrence of this pitch in the measure - show accidental
-            if (hasSharp) {
-              sn.addAccidental(0, new VF.Accidental('#'));
-            } else if (hasFlat) {
-              sn.addAccidental(0, new VF.Accidental('b'));
-            }
-            accidentalsInMeasure.add(pitchKey);
+        if (previousAccidental === undefined) {
+          // First occurrence of this pitch in the measure
+          if (currentAccidental === 'sharp') {
+            sn.addAccidental(0, new VF.Accidental('#'));
+          } else if (currentAccidental === 'flat') {
+            sn.addAccidental(0, new VF.Accidental('b'));
           }
-          // Subsequent occurrences: no accidental needed (carries through measure)
+          // Natural notes don't need accidental on first occurrence
+        } else if (previousAccidental !== currentAccidental) {
+          // Accidental state changed - show the new accidental
+          if (currentAccidental === 'natural') {
+            sn.addAccidental(0, new VF.Accidental('n')); // Natural sign
+          } else if (currentAccidental === 'sharp') {
+            sn.addAccidental(0, new VF.Accidental('#'));
+          } else if (currentAccidental === 'flat') {
+            sn.addAccidental(0, new VF.Accidental('b'));
+          }
         }
+        // else: same accidental as before, no need to show it again
+
+        // Update state
+        accidentalState.set(pitchKey, currentAccidental);
 
         // Get scale degree for display (for scale tones)
         // Use degree from JSON if available (for scale-step notes), otherwise calculate it
