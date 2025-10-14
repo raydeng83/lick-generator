@@ -92,7 +92,7 @@
 
   function buildModel() {
     const meta = Schema.defaultMetadata();
-    meta.tempo = parseInt(ui.tempo.value || "120", 10) || 120;
+    meta.tempo = 120;  // Default tempo (actual tempo set at playback time)
     const { progression, bars } = Schema.parseProgression(ui.progression.value);
 
     // Pass scale and device strategies to generator
@@ -146,13 +146,17 @@
         }
       }
 
+      // Get current tempo from UI (not from lastModel)
+      const currentTempo = parseInt(ui.tempo.value || "120", 10) || 120;
+      const metadata = { ...lastModel.metadata, tempo: currentTempo };
+
       const instrumentName = ui.instrument.value;
       const needsLoading = instrumentName !== 'synth';
 
       setStatus(needsLoading ? "Loading samples..." : "Playing...");
       await AudioEngine.play({
         lick: lickToPlay,
-        metadata: lastModel.metadata,
+        metadata: metadata,
         metronome: ui.metronome.checked,
         instrument: instrumentName,
         chords: ui.chords.checked,
