@@ -415,8 +415,9 @@ window.LickGen = (function () {
         break;
 
       case 'neighbor':
-        // Neighbor tone: target → neighbor → target pattern
-        // Apply pattern where appropriate, fill rest with chord tones/scale steps
+        // Neighbor tone: target → neighbor → target pattern (Rule 8)
+        // Lower neighbor: half-step down (chromatic)
+        // Upper neighbor: next scale note from above (diatonic)
         for (let i = 0; i < slots.length; i++) {
           const slot = slots[i];
           const isStrongBeat = (slot.slot % 4 === 0);
@@ -436,12 +437,12 @@ window.LickGen = (function () {
             lastMidi = target.midi;
             i++;
 
-            // Neighbor (scale step above or below)
+            // Neighbor (Rule 8: half-step down OR scale note from above)
             const neighborType = device.neighborType || 'upper';
             const scalePcs = scalePitchClasses(slots[i].rootPc, slots[i].quality, slots[i].scaleName);
             const neighborMidi = neighborType === 'upper'
-              ? scaleStep(lastMidi, slots[i].rootPc, scalePcs, 1)
-              : scaleStep(lastMidi, slots[i].rootPc, scalePcs, -1);
+              ? getUpperNeighbor(target.midi, slots[i].rootPc, scalePcs)  // Scale note from above
+              : getLowerNeighbor(target.midi);                             // Half-step down
 
             result.push({
               ...slots[i],
@@ -474,66 +475,75 @@ window.LickGen = (function () {
         break;
 
       case 'enclosure':
-        // Enclosure: chromatic approach from both sides to target
-        // Pattern: upper → lower → target (or lower → upper → target)
+        // Enclosure: use both neighbor tones to approach target (Rule 8)
+        // Upper neighbor: next scale note from above (diatonic)
+        // Lower neighbor: half-step down (chromatic)
+        // Pattern: upper → lower → target OR lower → upper → target
         for (let i = 0; i < slots.length; i++) {
           const slot = slots[i];
           const isStrongBeat = (slot.slot % 4 === 0);
 
-          // Check if we can fit enclosure pattern (need 3-4 consecutive slots)
+          // Check if we can fit enclosure pattern (need 3 consecutive slots)
           if (i + 2 < slots.length && isStrongBeat) {
             // Determine target (next strong beat chord tone)
             const targetSlot = slots[i + 2] < slots.length ? slots[i + 2] : slot;
             const target = resolveChordTone(targetSlot, lastMidi);
 
-            // Enclosure approach notes
+            // Calculate both neighbor tones per Rule 8
+            const scalePcs = scalePitchClasses(slot.rootPc, slot.quality, slot.scaleName);
+            const upperNeighbor = getUpperNeighbor(target.midi, slot.rootPc, scalePcs);  // Scale note from above
+            const lowerNeighbor = getLowerNeighbor(target.midi);                          // Half-step down
+
+            // Apply enclosure pattern
             const enclosureType = device.enclosureType || 'upper-lower';
             if (enclosureType === 'upper-lower') {
-              // Upper chromatic
+              // Upper approach (diatonic scale note from above)
               result.push({
                 ...slot,
-                midi: target.midi + 1,
+                midi: upperNeighbor,
                 velocity: 0.9,
                 ruleId: 'enclosure-upper',
                 harmonicFunction: 'scale-step',
                 degree: null,
               });
-              lastMidi = target.midi + 1;
+              lastMidi = upperNeighbor;
               i++;
 
-              // Lower chromatic
+              // Lower approach (chromatic half-step down)
               result.push({
                 ...slots[i],
-                midi: target.midi - 1,
+                midi: lowerNeighbor,
                 velocity: 0.9,
                 ruleId: 'enclosure-lower',
                 harmonicFunction: 'scale-step',
                 degree: null,
               });
-              lastMidi = target.midi - 1;
+              lastMidi = lowerNeighbor;
               i++;
             } else {
               // Lower-upper
+              // Lower approach (chromatic half-step down)
               result.push({
                 ...slot,
-                midi: target.midi - 1,
+                midi: lowerNeighbor,
                 velocity: 0.9,
                 ruleId: 'enclosure-lower',
                 harmonicFunction: 'scale-step',
                 degree: null,
               });
-              lastMidi = target.midi - 1;
+              lastMidi = lowerNeighbor;
               i++;
 
+              // Upper approach (diatonic scale note from above)
               result.push({
                 ...slots[i],
-                midi: target.midi + 1,
+                midi: upperNeighbor,
                 velocity: 0.9,
                 ruleId: 'enclosure-upper',
                 harmonicFunction: 'scale-step',
                 degree: null,
               });
-              lastMidi = target.midi + 1;
+              lastMidi = upperNeighbor;
               i++;
             }
 
@@ -875,6 +885,23 @@ window.LickGen = (function () {
     let next = pcToMidiNear(scaleAbs[nextIdx], midiPrev ?? 64);
     next = clampRange(next);
     return next;
+  }
+
+  /**
+   * RULE 8: Get lower neighbor tone
+   * Lower neighbor is always a half-step down (chromatic)
+   */
+  function getLowerNeighbor(targetMidi) {
+    return targetMidi - 1;
+  }
+
+  /**
+   * RULE 8: Get upper neighbor tone
+   * Upper neighbor is the next scale note from above (diatonic)
+   */
+  function getUpperNeighbor(targetMidi, rootPc, scalePcs) {
+    // Find next scale note above target
+    return scaleStep(targetMidi, rootPc, scalePcs, 1);
   }
 
   function constrainToRange(midi, lastMidi, [lo, hi]) {

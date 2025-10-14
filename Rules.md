@@ -38,3 +38,6 @@ Melodic Structure is small cells of notes to create melody, four note groupings:
 
 #Rule 7
 For ii-V-I, the I chord measure can ends early, in most cases.
+
+#Rule 8
+Neighbor tone of a target note is defined as either a half-step down from the target note, or next scale not from above. Enclosure means use both neighbor tones together, that is lower side tone first then upper tone, or upper tone first then lower tone. Eventually, enclosure will always lead to target note, which is usually the first note of next measure.

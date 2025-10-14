@@ -58,8 +58,10 @@ window.Devices = (function () {
   }
 
   /**
-   * Generate neighbor tone device plan
+   * Generate neighbor tone device plan (Rule 8)
    * Target → Neighbor → Target
+   * Lower neighbor: half-step down (chromatic)
+   * Upper neighbor: next scale note from above (diatonic)
    * @param {Object} options
    * @returns {Object} Device plan
    */
@@ -69,14 +71,18 @@ window.Devices = (function () {
     return {
       type: DEVICE_TYPES.NEIGHBOR,
       neighborType: neighborType,
-      name: neighborType === 'upper' ? 'Upper Neighbor' : 'Lower Neighbor',
+      name: neighborType === 'upper'
+        ? 'Upper Neighbor (scale note above)'
+        : 'Lower Neighbor (half-step down)',
       slotsNeeded: 3, // target, neighbor, target
     };
   }
 
   /**
-   * Generate enclosure device plan
-   * Chromatic approach from both sides
+   * Generate enclosure device plan (Rule 8)
+   * Use both neighbor tones to approach target
+   * Upper neighbor: next scale note from above (diatonic)
+   * Lower neighbor: half-step down (chromatic)
    * @param {Object} options
    * @returns {Object} Device plan
    */
@@ -86,8 +92,10 @@ window.Devices = (function () {
     return {
       type: DEVICE_TYPES.ENCLOSURE,
       enclosureType: enclosureType,
-      name: 'Chromatic Enclosure',
-      slotsNeeded: 4, // approaches + target
+      name: enclosureType === 'upper-lower'
+        ? 'Enclosure (scale→chromatic)'
+        : 'Enclosure (chromatic→scale)',
+      slotsNeeded: 3, // upper neighbor, lower neighbor, target
     };
   }
 
