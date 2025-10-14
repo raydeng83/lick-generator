@@ -348,7 +348,8 @@ window.DevicesNew = (function () {
 
   /**
    * Neighbor/Enclosure Device
-   * Last 2 notes are enclosure pattern approaching next target
+   * Creates two enclosure patterns per measure
+   * Structure: Target → Fill(2) → Enclosure(2) → Target → Enclosure(2)
    * Enclosure uses both lower (chromatic) and upper (diatonic) neighbors
    */
   function generateNeighborEnclosure(context) {
@@ -360,21 +361,22 @@ window.DevicesNew = (function () {
     }
 
     const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
+    const chordPcs = getChordPitchClasses(rootPc, quality);
     const notes = [];
 
-    // Start with target note
+    // Slot 0: First target note (chord tone)
     notes.push({
       ...targetNote,
-      device: 'neighbor-approach',
+      device: 'enclosure-target',
       chordSymbol: chord.symbol,
       rootPc,
       quality,
       scaleName: scale,
     });
 
-    // Fill first 6 notes with scale steps
+    // Slots 1-2: Fill pattern (2 notes with scale steps)
     let currentMidi = targetNote.midi;
-    for (let i = 1; i < 6; i++) {
+    for (let i = 1; i <= 2; i++) {
       currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
 
       notes.push({
@@ -382,7 +384,7 @@ window.DevicesNew = (function () {
         durationBeats: 0.5,
         midi: currentMidi,
         velocity: 0.9,
-        device: 'neighbor-approach',
+        device: 'enclosure-fill',
         chordSymbol: chord.symbol,
         rootPc,
         quality,
@@ -392,46 +394,129 @@ window.DevicesNew = (function () {
       });
     }
 
-    // Last 2 notes: enclosure approaching next target
-    const targetMidi = nextTarget.midi;
-    const nextScalePcs = window.Scales.getScalePitchClasses(nextTarget.rootPc || rootPc, context.nextScale || scale);
+    // Slot 5: Middle target note (chord tone)
+    // Select a chord tone for the middle target
+    const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
+    const middleTargetMidi = selectChordTone(currentMidi, chordAbs);
 
-    const lowerNeighbor = targetMidi - 1; // chromatic (half-step below)
-    const upperNeighbor = getUpperNeighbor(targetMidi, nextTarget.rootPc || rootPc, nextScalePcs); // diatonic (scale step above)
-
-    const enclosureType = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+    // Slots 3-4: First enclosure approaching middle target (slot 5)
+    const lowerNeighbor1 = middleTargetMidi - 1;
+    const upperNeighbor1 = getUpperNeighbor(middleTargetMidi, rootPc, scalePcs);
+    const enclosureType1 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
 
     notes.push({
-      startBeat: measureStart + 3,
+      startBeat: measureStart + 1.5,
       durationBeats: 0.5,
-      midi: enclosureType === 'upper-lower' ? upperNeighbor : lowerNeighbor,
+      midi: enclosureType1 === 'upper-lower' ? upperNeighbor1 : lowerNeighbor1,
       velocity: 0.9,
       device: 'enclosure',
-      enclosureType: enclosureType === 'upper-lower' ? 'upper' : 'lower',
+      enclosureType: enclosureType1 === 'upper-lower' ? 'upper' : 'lower',
       chordSymbol: chord.symbol,
       rootPc,
       quality,
       scaleName: scale,
       ruleId: 'enclosure',
-      harmonicFunction: enclosureType === 'upper-lower' ? 'scale-step' : 'chromatic',
+      harmonicFunction: enclosureType1 === 'upper-lower' ? 'scale-step' : 'chromatic',
+    });
+
+    notes.push({
+      startBeat: measureStart + 2,
+      durationBeats: 0.5,
+      midi: enclosureType1 === 'upper-lower' ? lowerNeighbor1 : upperNeighbor1,
+      velocity: 0.9,
+      device: 'enclosure',
+      enclosureType: enclosureType1 === 'upper-lower' ? 'lower' : 'upper',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+      ruleId: 'enclosure',
+      harmonicFunction: enclosureType1 === 'upper-lower' ? 'chromatic' : 'scale-step',
+    });
+
+    // Slot 5: Middle target
+    notes.push({
+      startBeat: measureStart + 2.5,
+      durationBeats: 0.5,
+      midi: middleTargetMidi,
+      velocity: 0.9,
+      device: 'enclosure-target',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+      ruleId: 'chord-tone',
+      harmonicFunction: 'chord-tone',
+    });
+
+    // Slots 6-7: Second enclosure approaching next measure's target
+    const nextTargetMidi = nextTarget.midi;
+    const nextScalePcs = window.Scales.getScalePitchClasses(nextTarget.rootPc || rootPc, context.nextScale || scale);
+
+    const lowerNeighbor2 = nextTargetMidi - 1;
+    const upperNeighbor2 = getUpperNeighbor(nextTargetMidi, nextTarget.rootPc || rootPc, nextScalePcs);
+    const enclosureType2 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+
+    notes.push({
+      startBeat: measureStart + 3,
+      durationBeats: 0.5,
+      midi: enclosureType2 === 'upper-lower' ? upperNeighbor2 : lowerNeighbor2,
+      velocity: 0.9,
+      device: 'enclosure',
+      enclosureType: enclosureType2 === 'upper-lower' ? 'upper' : 'lower',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+      ruleId: 'enclosure',
+      harmonicFunction: enclosureType2 === 'upper-lower' ? 'scale-step' : 'chromatic',
     });
 
     notes.push({
       startBeat: measureStart + 3.5,
       durationBeats: 0.5,
-      midi: enclosureType === 'upper-lower' ? lowerNeighbor : upperNeighbor,
+      midi: enclosureType2 === 'upper-lower' ? lowerNeighbor2 : upperNeighbor2,
       velocity: 0.9,
       device: 'enclosure',
-      enclosureType: enclosureType === 'upper-lower' ? 'lower' : 'upper',
+      enclosureType: enclosureType2 === 'upper-lower' ? 'lower' : 'upper',
       chordSymbol: chord.symbol,
       rootPc,
       quality,
       scaleName: scale,
       ruleId: 'enclosure',
-      harmonicFunction: enclosureType === 'upper-lower' ? 'chromatic' : 'scale-step',
+      harmonicFunction: enclosureType2 === 'upper-lower' ? 'chromatic' : 'scale-step',
     });
 
     return notes;
+  }
+
+  /**
+   * Select a chord tone near the current pitch
+   */
+  function selectChordTone(currentMidi, chordAbs) {
+    const candidates = [];
+
+    // Find chord tones in nearby octaves
+    for (let octave = -1; octave <= 1; octave++) {
+      for (const pc of chordAbs) {
+        const midi = Math.floor(currentMidi / 12) * 12 + pc + octave * 12;
+        if (midi >= 55 && midi <= 81) {
+          candidates.push(midi);
+        }
+      }
+    }
+
+    // Sort by distance from current note
+    candidates.sort((a, b) => Math.abs(a - currentMidi) - Math.abs(b - currentMidi));
+
+    // Return a nearby chord tone (prefer not the exact same note)
+    for (const midi of candidates) {
+      if (midi !== currentMidi) {
+        return midi;
+      }
+    }
+
+    return candidates[0] || currentMidi;
   }
 
   // ========== DEVICE SELECTION ==========
