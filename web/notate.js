@@ -115,10 +115,8 @@ window.Notate = (function () {
 
         // Color code notes by harmonic function
         if (n.harmonicFunction === 'chord-tone' || n.ruleId === 'chord-tone' ||
-            n.ruleId === 'neighbor-target' || n.ruleId === 'neighbor-return' ||
-            n.ruleId === 'enclosure-target' || n.ruleId === 'arpeggio-chord-tone' ||
-            n.ruleId === 'scale-run-chord-tone') {
-          // Chord tones: Blue
+            n.ruleId === 'arpeggio-chord-tone' || n.ruleId === 'scale-run-chord-tone') {
+          // Chord tones: Blue (includes targets from neighbor/enclosure devices)
           sn.setStyle({ fillStyle: '#4cc3ff', strokeStyle: '#4cc3ff' });
 
           // Add degree annotation below the note
