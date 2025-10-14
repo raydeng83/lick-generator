@@ -349,6 +349,7 @@ window.DevicesNew = (function () {
   /**
    * Neighbor/Enclosure Device
    * Last 2 notes are enclosure pattern approaching next target
+   * First 6 notes filled by randomly selected device
    * Enclosure uses both lower (chromatic) and upper (diatonic) neighbors
    */
   function generateNeighborEnclosure(context) {
@@ -359,38 +360,35 @@ window.DevicesNew = (function () {
       return generateArpeggio(context);
     }
 
-    const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
     const notes = [];
 
-    // Start with target note
-    notes.push({
-      ...targetNote,
-      device: 'neighbor-approach',
-      chordSymbol: chord.symbol,
-      rootPc,
-      quality,
-      scaleName: scale,
-    });
+    // Randomly select device for first 6 notes
+    const rand = Math.random();
+    let fillDevice;
+    if (rand < 0.25) fillDevice = 'arpeggio';
+    else if (rand < 0.50) fillDevice = 'scale-run';
+    else if (rand < 0.75) fillDevice = 'melodic-cell';
+    else fillDevice = 'neighbor-enclosure';
 
-    // Fill first 6 notes with scale steps
-    let currentMidi = targetNote.midi;
-    for (let i = 1; i < 6; i++) {
-      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
-
-      notes.push({
-        startBeat: measureStart + i * 0.5,
-        durationBeats: 0.5,
-        midi: currentMidi,
-        velocity: 0.9,
-        device: 'neighbor-approach',
-        chordSymbol: chord.symbol,
-        rootPc,
-        quality,
-        scaleName: scale,
-        ruleId: 'scale-step',
-        harmonicFunction: 'scale-step',
-      });
+    // Generate first 6 notes using selected device
+    let fillNotes = [];
+    switch (fillDevice) {
+      case 'arpeggio':
+        fillNotes = generateArpeggioPartial(context, 6);
+        break;
+      case 'scale-run':
+        fillNotes = generateScaleRunPartial(context, 6);
+        break;
+      case 'melodic-cell':
+        fillNotes = generateMelodicCellPartial(context, 6);
+        break;
+      case 'neighbor-enclosure':
+        fillNotes = generateNeighborEnclosurePartial(context, 6);
+        break;
     }
+
+    // Add first 6 notes
+    notes.push(...fillNotes);
 
     // Last 2 notes: enclosure approaching next target
     const targetMidi = nextTarget.midi;
@@ -430,6 +428,227 @@ window.DevicesNew = (function () {
       ruleId: 'enclosure',
       harmonicFunction: enclosureType === 'upper-lower' ? 'chromatic' : 'scale-step',
     });
+
+    return notes;
+  }
+
+  // ========== PARTIAL DEVICE GENERATORS (for enclosure fill) ==========
+
+  /**
+   * Generate partial arpeggio (first N notes only)
+   */
+  function generateArpeggioPartial(context, noteCount) {
+    const { chord, rootPc, quality, scale, targetNote } = context;
+    const measureStart = targetNote.startBeat;
+    const notes = [];
+
+    // Start with target note
+    notes.push({
+      ...targetNote,
+      device: 'arpeggio',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+    });
+
+    const chordPcs = getChordPitchClasses(rootPc, quality);
+    const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
+    const direction = Math.random() < 0.5 ? 1 : -1;
+
+    let currentMidi = targetNote.midi;
+    let chordIndex = chordAbs.findIndex(pc => (currentMidi % 12) === pc);
+    if (chordIndex === -1) chordIndex = 0;
+
+    for (let i = 1; i < noteCount; i++) {
+      chordIndex = (chordIndex + direction + chordAbs.length) % chordAbs.length;
+      const pc = chordAbs[chordIndex];
+      let midi = Math.floor(currentMidi / 12) * 12 + pc;
+
+      if (direction > 0 && midi <= currentMidi) midi += 12;
+      if (direction < 0 && midi >= currentMidi) midi -= 12;
+
+      while (midi < 55) midi += 12;
+      while (midi > 81) midi -= 12;
+
+      notes.push({
+        startBeat: measureStart + i * 0.5,
+        durationBeats: 0.5,
+        midi,
+        velocity: 0.9,
+        device: 'arpeggio',
+        chordSymbol: chord.symbol,
+        rootPc,
+        quality,
+        scaleName: scale,
+        ruleId: 'arpeggio',
+        harmonicFunction: 'chord-tone',
+      });
+
+      currentMidi = midi;
+    }
+
+    return notes;
+  }
+
+  /**
+   * Generate partial scale run (first N notes only)
+   */
+  function generateScaleRunPartial(context, noteCount) {
+    const { chord, rootPc, quality, scale, targetNote } = context;
+    const measureStart = targetNote.startBeat;
+
+    if (!window.Scales) return generateArpeggioPartial(context, noteCount);
+
+    const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
+    const notes = [];
+
+    notes.push({
+      ...targetNote,
+      device: 'scale-run',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+    });
+
+    let currentMidi = targetNote.midi;
+    const direction = Math.random() < 0.5 ? 1 : -1;
+
+    for (let i = 1; i < noteCount; i++) {
+      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, direction);
+
+      notes.push({
+        startBeat: measureStart + i * 0.5,
+        durationBeats: 0.5,
+        midi: currentMidi,
+        velocity: 0.9,
+        device: 'scale-run',
+        chordSymbol: chord.symbol,
+        rootPc,
+        quality,
+        scaleName: scale,
+        ruleId: 'scale-step',
+        harmonicFunction: 'scale-step',
+      });
+    }
+
+    return notes;
+  }
+
+  /**
+   * Generate partial melodic cell (first N notes only)
+   */
+  function generateMelodicCellPartial(context, noteCount) {
+    const { chord, rootPc, quality, scale, targetNote } = context;
+    const measureStart = targetNote.startBeat;
+
+    if (!window.MelodicCells || !window.Scales) {
+      return generateArpeggioPartial(context, noteCount);
+    }
+
+    const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
+    const notes = [];
+
+    notes.push({
+      ...targetNote,
+      device: 'melodic-cell',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+    });
+
+    const cell = window.MelodicCells.getRandomCell();
+    let currentMidi = targetNote.midi;
+
+    // Use cell degrees for first notes, then fill with scale steps
+    const cellLength = Math.min(cell.degrees.length, noteCount - 1);
+
+    for (let i = 0; i < cellLength; i++) {
+      const degree = cell.degrees[i];
+      const midi = window.MelodicCells.degreeToMidi(degree, rootPc, scalePcs, currentMidi);
+
+      notes.push({
+        startBeat: measureStart + (i + 1) * 0.5,
+        durationBeats: 0.5,
+        midi,
+        velocity: 0.9,
+        device: 'melodic-cell',
+        cellName: cell.name,
+        chordSymbol: chord.symbol,
+        rootPc,
+        quality,
+        scaleName: scale,
+        ruleId: 'melodic-cell',
+        harmonicFunction: 'scale-step',
+      });
+
+      currentMidi = midi;
+    }
+
+    // Fill remaining with scale steps
+    for (let i = cellLength + 1; i < noteCount; i++) {
+      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+
+      notes.push({
+        startBeat: measureStart + i * 0.5,
+        durationBeats: 0.5,
+        midi: currentMidi,
+        velocity: 0.9,
+        device: 'melodic-cell-fill',
+        chordSymbol: chord.symbol,
+        rootPc,
+        quality,
+        scaleName: scale,
+        ruleId: 'scale-step',
+        harmonicFunction: 'scale-step',
+      });
+    }
+
+    return notes;
+  }
+
+  /**
+   * Generate partial neighbor/enclosure (first N notes with scale steps)
+   */
+  function generateNeighborEnclosurePartial(context, noteCount) {
+    const { chord, rootPc, quality, scale, targetNote } = context;
+    const measureStart = targetNote.startBeat;
+
+    if (!window.Scales) return generateArpeggioPartial(context, noteCount);
+
+    const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
+    const notes = [];
+
+    notes.push({
+      ...targetNote,
+      device: 'neighbor-approach',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+    });
+
+    let currentMidi = targetNote.midi;
+
+    for (let i = 1; i < noteCount; i++) {
+      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+
+      notes.push({
+        startBeat: measureStart + i * 0.5,
+        durationBeats: 0.5,
+        midi: currentMidi,
+        velocity: 0.9,
+        device: 'neighbor-approach',
+        chordSymbol: chord.symbol,
+        rootPc,
+        quality,
+        scaleName: scale,
+        ruleId: 'scale-step',
+        harmonicFunction: 'scale-step',
+      });
+    }
 
     return notes;
   }
