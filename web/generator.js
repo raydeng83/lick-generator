@@ -121,14 +121,13 @@ window.LickGen = (function () {
 
     // Determine if key uses sharps or flats based on root
     // Sharp keys: G(7), D(2), A(9), E(4), B(11), F#(6), C#(1)
-    // Flat keys: F(5), Bb(10), Eb(3), Ab(8), Db(1), Gb(6)
-    // Note: C(0) is neutral, can use either
+    // Flat keys: C(0), F(5), Bb(10), Eb(3), Ab(8), Db(1), Gb(6)
 
     const sharpKeys = [7, 2, 9, 4, 11, 6]; // G, D, A, E, B, F#
-    const flatKeys = [5, 10, 3, 8]; // F, Bb, Eb, Ab
+    const flatKeys = [0, 5, 10, 3, 8]; // C, F, Bb, Eb, Ab
 
     const useFlats = flatKeys.includes(rootPc);
-    const useSharps = sharpKeys.includes(rootPc) || rootPc === 0; // C major uses sharps by default
+    const useSharps = sharpKeys.includes(rootPc);
 
     // For ambiguous cases (Db/C#, Gb/F#), prefer flats if not in sharp keys
     if (useFlats) {
