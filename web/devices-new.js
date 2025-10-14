@@ -573,7 +573,8 @@ window.DevicesNew = (function () {
 
   function nextScaleNote(midi, rootPc, scalePcs, direction = 1) {
     const pc = midi % 12;
-    const scaleAbs = scalePcs.map(p => (rootPc + p) % 12);
+    // scalePcs is already absolute pitch classes, don't add rootPc again!
+    const scaleAbs = scalePcs;
 
     let idx = scaleAbs.findIndex(p => p === pc);
     if (idx === -1) {
@@ -611,12 +612,14 @@ window.DevicesNew = (function () {
 
   function getUpperNeighbor(targetMidi, rootPc, scalePcs) {
     const targetPc = targetMidi % 12;
-    const scaleAbs = scalePcs.map(pc => (rootPc + pc) % 12);
+    // scalePcs is already absolute pitch classes, don't add rootPc again!
+    const scaleAbs = scalePcs;
+    const targetOctaveBase = Math.floor(targetMidi / 12) * 12;
 
     const candidates = [];
     for (let octave = -1; octave <= 1; octave++) {
       for (const pc of scaleAbs) {
-        const midi = targetMidi + octave * 12 + ((pc - targetPc + 12) % 12);
+        const midi = targetOctaveBase + octave * 12 + pc;
         if (midi > targetMidi && midi < targetMidi + 12) {
           candidates.push(midi);
         }
@@ -647,7 +650,8 @@ window.DevicesNew = (function () {
 
   function generateScaleApproach(startMidi, targetMidi, scalePcs, rootPc, noteCount) {
     // Generate scale steps that approach target
-    const scaleAbs = scalePcs.map(pc => (rootPc + pc) % 12);
+    // scalePcs is already absolute pitch classes, don't add rootPc again!
+    const scaleAbs = scalePcs;
     const direction = targetMidi > startMidi ? 1 : -1;
     const notes = [];
 

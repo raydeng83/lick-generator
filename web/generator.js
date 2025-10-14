@@ -102,6 +102,17 @@ window.LickGen = (function () {
     return midi;
   }
 
+  /**
+   * Convert MIDI number to note name (e.g., 60 -> "C4", 61 -> "C#4")
+   * Always uses sharps for simplicity
+   */
+  function midiToNoteName(midi) {
+    const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const octave = Math.floor(midi / 12) - 1;
+    const noteName = noteNames[midi % 12];
+    return `${noteName}${octave}`;
+  }
+
   // ========== PHASE 1: PRE-FILL TARGETS ==========
 
   /**
@@ -154,6 +165,7 @@ window.LickGen = (function () {
         ...measure,
         targetNote: {
           midi: targetMidi,
+          noteName: midiToNoteName(targetMidi),
           degree,
           startBeat: measure.measureStart,
           durationBeats: 0.5,
@@ -285,6 +297,7 @@ window.LickGen = (function () {
         startBeat: measureStart + i * 0.5,
         durationBeats: 0.5,
         midi: currentMidi,
+        noteName: midiToNoteName(currentMidi),
         velocity: 0.9,
         ruleId: 'scale-step',
         harmonicFunction: 'scale-step',
@@ -304,12 +317,23 @@ window.LickGen = (function () {
   function postProcess(notes, options = {}) {
     const { swing = 0 } = options;
 
+    // Add note names to all notes that don't have them
+    let processed = notes.map(note => {
+      if (!note.noteName && note.midi !== undefined) {
+        return {
+          ...note,
+          noteName: midiToNoteName(note.midi)
+        };
+      }
+      return note;
+    });
+
     if (swing === 0) {
-      return notes;
+      return processed;
     }
 
     // Apply swing timing to eighth notes
-    return applySwing(notes, swing);
+    return applySwing(processed, swing);
   }
 
   /**
