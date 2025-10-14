@@ -140,8 +140,10 @@ window.DevicesNew = (function () {
     // If last measure or no next target, just continue scale
     if (isLastMeasure || !nextTarget) {
       const direction = Math.random() < 0.5 ? 1 : -1;
+      const chordPcs = getChordPitchClasses(rootPc, quality);
       for (let i = 1; i < 6; i++) {
         currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, direction);
+        const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
         notes.push({
           startBeat: measureStart + i * 0.5,
           durationBeats: 0.5,
@@ -152,8 +154,8 @@ window.DevicesNew = (function () {
           rootPc,
           quality,
           scaleName: scale,
-          ruleId: 'scale-step',
-          harmonicFunction: 'scale-step',
+          ruleId: isChordToneNote ? 'scale-run-chord-tone' : 'scale-step',
+          harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
         });
       }
       return notes;
@@ -164,8 +166,10 @@ window.DevicesNew = (function () {
     const startDirection = Math.random() < 0.5 ? 1 : -1;
 
     // First half: scale run in random direction
+    const chordPcs = getChordPitchClasses(rootPc, quality);
     for (let i = 1; i <= 3; i++) {
       currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, startDirection);
+      const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
       notes.push({
         startBeat: measureStart + i * 0.5,
         durationBeats: 0.5,
@@ -176,8 +180,8 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
-        ruleId: 'scale-step',
-        harmonicFunction: 'scale-step',
+        ruleId: isChordToneNote ? 'scale-run-chord-tone' : 'scale-step',
+        harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
       });
     }
 
@@ -187,6 +191,7 @@ window.DevicesNew = (function () {
 
     const approachNotes = generateScaleApproach(currentMidi, targetMidi, nextScale, nextTarget.rootPc || rootPc, 4);
     for (let i = 0; i < approachNotes.length; i++) {
+      const isChordToneNote = isChordTone(approachNotes[i], rootPc, chordPcs);
       notes.push({
         startBeat: measureStart + (4 + i) * 0.5,
         durationBeats: 0.5,
@@ -197,8 +202,8 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
-        ruleId: 'scale-step',
-        harmonicFunction: 'scale-step',
+        ruleId: isChordToneNote ? 'scale-run-chord-tone' : 'scale-step',
+        harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
       });
     }
 
@@ -234,11 +239,13 @@ window.DevicesNew = (function () {
     // Get random cell
     const cell = window.MelodicCells.getRandomCell();
     let currentMidi = targetNote.midi;
+    const chordPcs = getChordPitchClasses(rootPc, quality);
 
     // Generate cell pattern (4 notes starting from beat 0.5)
     for (let i = 0; i < cell.degrees.length && i < 3; i++) {
       const degree = cell.degrees[i];
       const midi = window.MelodicCells.degreeToMidi(degree, rootPc, scalePcs, currentMidi);
+      const isChordToneNote = isChordTone(midi, rootPc, chordPcs);
 
       notes.push({
         startBeat: measureStart + (i + 1) * 0.5,
@@ -251,8 +258,8 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
-        ruleId: 'melodic-cell',
-        harmonicFunction: 'scale-step',
+        ruleId: isChordToneNote ? 'melodic-cell-chord-tone' : 'melodic-cell',
+        harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
       });
 
       currentMidi = midi;
@@ -265,6 +272,7 @@ window.DevicesNew = (function () {
       // Fill middle with scale steps
       for (let i = 4; i < 6; i++) {
         currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+        const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
         notes.push({
           startBeat: measureStart + i * 0.5,
           durationBeats: 0.5,
@@ -275,8 +283,8 @@ window.DevicesNew = (function () {
           rootPc,
           quality,
           scaleName: scale,
-          ruleId: 'scale-step',
-          harmonicFunction: 'scale-step',
+          ruleId: isChordToneNote ? 'chord-tone' : 'scale-step',
+          harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
         });
       }
 
@@ -327,6 +335,7 @@ window.DevicesNew = (function () {
           currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
         }
 
+        const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
         notes.push({
           startBeat: measureStart + i * 0.5,
           durationBeats: 0.5,
@@ -337,8 +346,8 @@ window.DevicesNew = (function () {
           rootPc,
           quality,
           scaleName: scale,
-          ruleId: 'scale-step',
-          harmonicFunction: 'scale-step',
+          ruleId: isChordToneNote ? 'chord-tone' : 'scale-step',
+          harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
         });
       }
     }
@@ -379,6 +388,9 @@ window.DevicesNew = (function () {
     for (let i = 1; i <= 2; i++) {
       currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
 
+      // Check if this scale-step note accidentally lands on a chord tone
+      const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
+
       notes.push({
         startBeat: measureStart + i * 0.5,
         durationBeats: 0.5,
@@ -389,8 +401,8 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
-        ruleId: 'scale-step',
-        harmonicFunction: 'scale-step',
+        ruleId: isChordToneNote ? 'chord-tone' : 'scale-step',
+        harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
       });
     }
 
@@ -517,6 +529,19 @@ window.DevicesNew = (function () {
     }
 
     return candidates[0] || currentMidi;
+  }
+
+  /**
+   * Check if a MIDI note is a chord tone
+   * @param {number} midi - MIDI note number
+   * @param {number} rootPc - Root pitch class
+   * @param {number[]} chordPcs - Chord pitch classes (relative intervals)
+   * @returns {boolean} True if note is a chord tone
+   */
+  function isChordTone(midi, rootPc, chordPcs) {
+    const pc = (midi % 12 + 12) % 12;
+    const relPc = (pc - rootPc + 12) % 12;
+    return chordPcs.includes(relPc);
   }
 
   // ========== DEVICE SELECTION ==========
