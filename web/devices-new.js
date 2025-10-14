@@ -448,14 +448,14 @@ window.DevicesNew = (function () {
 
     if (!endAfterFifthNote) {
       // ===== SCENARIO A: End BEFORE beat 10 (early ending, no enclosure) =====
-      // Randomly end at beat 8.5, 9.0, or 9.5
-      const endSlots = [1, 2, 3]; // slots after initial target
-      const numSlots = endSlots[Math.floor(Math.random() * endSlots.length)];
+      // Fill 2-4 notes, then end on root/3rd/5th
+      const numFillNotes = 2 + Math.floor(Math.random() * 3); // 2-4 fill notes
+      const totalSlots = numFillNotes + 1; // fill notes + ending note
 
       let currentMidi = targetNote.midi;
 
-      for (let i = 0; i < numSlots; i++) {
-        const isLastSlot = (i === numSlots - 1);
+      for (let i = 0; i < totalSlots; i++) {
+        const isLastSlot = (i === totalSlots - 1);
 
         if (isLastSlot) {
           // Last note: must be root/3rd/5th
