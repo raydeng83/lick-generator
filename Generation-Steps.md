@@ -26,3 +26,6 @@ Neighbor tone of a target note is defined as either a half-step down from the ta
 
 #Melodic Structure
 Melodic Structure is small cells of four note groupings from the scale that corresponding to the chord: 1-2-3-5, 1-3-4-5, 5-6-7-9, 5-7-8-9
+
+#Appegios
+3 notes or 4 notes, either straight up or straight down. One additional type is pivot arppegio, which is move the first note one octave higher.

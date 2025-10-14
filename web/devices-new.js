@@ -1,5 +1,6 @@
-// Redesigned device system - devices generate complete measure sequences
-// Each device is self-contained and determines its own rhythm and pitches
+// Target-first device system
+// All devices work backwards from pre-filled target notes
+// Targets are already defined in Phase 1 before device generation
 
 window.DevicesNew = (function () {
 
@@ -7,37 +8,73 @@ window.DevicesNew = (function () {
 
   /**
    * Arpeggio Device
-   * Generates notes cycling through chord tones
-   * Self-determines rhythm and note count
+   * Generates 3-4 note arpeggio patterns (straight up/down or pivot)
+   * Last note must be within 2 semitones of next target
    */
   function generateArpeggio(context) {
-    const { chord, rootPc, quality, scale, lastMidi, measureStart } = context;
+    const { chord, rootPc, quality, scale, targetNote, nextTarget, isLastMeasure } = context;
+    const measureStart = targetNote.startBeat;
+    const notes = [];
+
+    // Start with target note (first note of measure)
+    notes.push({
+      ...targetNote,
+      device: 'arpeggio',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+    });
 
     // Get chord tones
     const chordPcs = getChordPitchClasses(rootPc, quality);
     const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
 
-    // Decide direction
-    const direction = Math.random() < 0.5 ? 1 : -1; // 1=ascending, -1=descending
+    // Decide arpeggio type and direction
+    const noteCount = Math.random() < 0.75 ? 4 : 3; // 75% four notes, 25% three notes
+    const direction = Math.random() < 0.5 ? 1 : -1; // ascending or descending
+    const pivot = Math.random() < 0.2; // 20% chance of pivot arpeggio
 
-    // Generate 6-8 notes in the measure
-    const noteCount = 6 + Math.floor(Math.random() * 3);
-    const notes = [];
+    let currentMidi = targetNote.midi;
+    let currentOctave = Math.floor(currentMidi / 12);
 
-    let currentOctave = Math.floor(lastMidi / 12);
-    let chordIndex = 0;
+    // Find starting chord tone index
+    const startPc = currentMidi % 12;
+    let chordIndex = chordAbs.findIndex(pc => pc === startPc);
+    if (chordIndex === -1) chordIndex = 0;
 
-    for (let i = 0; i < noteCount; i++) {
-      const pc = chordAbs[chordIndex % chordAbs.length];
+    // Generate arpeggio pattern (6 more notes to fill measure, repeating if needed)
+    for (let i = 1; i < 7; i++) {
+      // Move to next chord tone
+      chordIndex = (chordIndex + direction + chordAbs.length) % chordAbs.length;
+
+      // Reset after completing pattern
+      if ((i - 1) % noteCount === 0 && i > 1) {
+        if (pivot && i === noteCount + 1) {
+          // Pivot: jump octave on first repeat
+          currentOctave += direction;
+        }
+      }
+
+      const pc = chordAbs[chordIndex];
       let midi = currentOctave * 12 + pc;
 
       // Clamp to range
       while (midi < 55) midi += 12;
       while (midi > 81) midi -= 12;
 
+      // On last note, check proximity to next target
+      if (i === 6 && nextTarget && !isLastMeasure) {
+        const distance = Math.abs(midi - nextTarget.midi);
+        if (distance > 2) {
+          // Too far, adjust to be within 2 semitones
+          midi = adjustToProximity(midi, nextTarget.midi, chordAbs, currentOctave);
+        }
+      }
+
       notes.push({
-        startBeat: measureStart + i * (4 / noteCount),
-        durationBeats: 4 / noteCount,
+        startBeat: measureStart + i * 0.5,
+        durationBeats: 0.5,
         midi,
         velocity: 0.9,
         device: 'arpeggio',
@@ -45,16 +82,29 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
+        ruleId: 'arpeggio',
+        harmonicFunction: 'chord-tone',
       });
 
-      // Move to next chord tone
-      chordIndex += direction;
-      if (chordIndex < 0) chordIndex = chordAbs.length - 1;
+      currentMidi = midi;
+      currentOctave = Math.floor(midi / 12);
+    }
 
-      // Sometimes jump octave
-      if (Math.random() < 0.2) {
-        currentOctave += direction;
-      }
+    // Last note for last measure (can be shorter)
+    if (!isLastMeasure) {
+      notes.push({
+        startBeat: measureStart + 3.5,
+        durationBeats: 0.5,
+        midi: currentMidi,
+        velocity: 0.9,
+        device: 'arpeggio',
+        chordSymbol: chord.symbol,
+        rootPc,
+        quality,
+        scaleName: scale,
+        ruleId: 'arpeggio',
+        harmonicFunction: 'chord-tone',
+      });
     }
 
     return notes;
@@ -62,27 +112,60 @@ window.DevicesNew = (function () {
 
   /**
    * Scale Run Device
-   * Generates stepwise scale motion
+   * Generates stepwise scale motion that runs INTO next target
+   * Can change direction anywhere in the measure
+   * Last note approaches target without repeating it
    */
   function generateScaleRun(context) {
-    const { chord, rootPc, quality, scale, lastMidi, measureStart } = context;
+    const { chord, rootPc, quality, scale, targetNote, nextTarget, isLastMeasure } = context;
+    const measureStart = targetNote.startBeat;
 
     if (!window.Scales) return generateArpeggio(context);
 
     const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
-    const scaleAbs = scalePcs.map(pc => (rootPc + pc) % 12);
-
-    // Direction: up or down
-    const direction = Math.random() < 0.5 ? 1 : -1;
-
-    // Start from nearest scale note to lastMidi
-    let currentMidi = findNearestScaleNote(lastMidi, rootPc, scalePcs);
-
-    // Generate 7-8 eighth notes
-    const noteCount = 7 + Math.floor(Math.random() * 2);
     const notes = [];
 
-    for (let i = 0; i < noteCount; i++) {
+    // Start with target note
+    notes.push({
+      ...targetNote,
+      device: 'scale-run',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+    });
+
+    let currentMidi = targetNote.midi;
+
+    // If last measure or no next target, just continue scale
+    if (isLastMeasure || !nextTarget) {
+      const direction = Math.random() < 0.5 ? 1 : -1;
+      for (let i = 1; i < 6; i++) {
+        currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, direction);
+        notes.push({
+          startBeat: measureStart + i * 0.5,
+          durationBeats: 0.5,
+          midi: currentMidi,
+          velocity: 0.9,
+          device: 'scale-run',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
+          ruleId: 'scale-step',
+          harmonicFunction: 'scale-step',
+        });
+      }
+      return notes;
+    }
+
+    // Calculate direction to approach target
+    const targetMidi = nextTarget.midi;
+    const startDirection = Math.random() < 0.5 ? 1 : -1;
+
+    // First half: scale run in random direction
+    for (let i = 1; i <= 3; i++) {
+      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, startDirection);
       notes.push({
         startBeat: measureStart + i * 0.5,
         durationBeats: 0.5,
@@ -93,14 +176,30 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
+        ruleId: 'scale-step',
+        harmonicFunction: 'scale-step',
       });
+    }
 
-      // Move to next scale note
-      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, direction);
+    // Second half: run toward target (last 4 notes approach target)
+    // Use next chord's scale for approach
+    const nextScale = window.Scales.getScalePitchClasses(nextTarget.rootPc || rootPc, context.nextScale || scale);
 
-      // Clamp to range
-      while (currentMidi < 55) currentMidi += 12;
-      while (currentMidi > 81) currentMidi -= 12;
+    const approachNotes = generateScaleApproach(currentMidi, targetMidi, nextScale, nextTarget.rootPc || rootPc, 4);
+    for (let i = 0; i < approachNotes.length; i++) {
+      notes.push({
+        startBeat: measureStart + (4 + i) * 0.5,
+        durationBeats: 0.5,
+        midi: approachNotes[i],
+        velocity: 0.9,
+        device: 'scale-run',
+        chordSymbol: chord.symbol,
+        rootPc,
+        quality,
+        scaleName: scale,
+        ruleId: 'scale-step',
+        harmonicFunction: 'scale-step',
+      });
     }
 
     return notes;
@@ -108,29 +207,41 @@ window.DevicesNew = (function () {
 
   /**
    * Melodic Cell Device
-   * Uses 4-note patterns from the scale
+   * Uses 4-note patterns from the scale (1-2-3-5, etc.)
+   * Can end with enclosure OR proximity to next target
    */
   function generateMelodicCell(context) {
-    const { chord, rootPc, quality, scale, lastMidi, measureStart } = context;
+    const { chord, rootPc, quality, scale, targetNote, nextTarget, isLastMeasure } = context;
+    const measureStart = targetNote.startBeat;
 
     if (!window.MelodicCells || !window.Scales) {
       return generateArpeggio(context);
     }
 
+    const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
+    const notes = [];
+
+    // Start with target note
+    notes.push({
+      ...targetNote,
+      device: 'melodic-cell',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+    });
+
     // Get random cell
     const cell = window.MelodicCells.getRandomCell();
-    const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
+    let currentMidi = targetNote.midi;
 
-    // Generate cell pattern (4 notes)
-    const notes = [];
-    let currentMidi = lastMidi;
-
-    for (let i = 0; i < cell.degrees.length; i++) {
+    // Generate cell pattern (4 notes starting from beat 0.5)
+    for (let i = 0; i < cell.degrees.length && i < 3; i++) {
       const degree = cell.degrees[i];
       const midi = window.MelodicCells.degreeToMidi(degree, rootPc, scalePcs, currentMidi);
 
       notes.push({
-        startBeat: measureStart + i * 0.5,
+        startBeat: measureStart + (i + 1) * 0.5,
         durationBeats: 0.5,
         midi,
         velocity: 0.9,
@@ -140,29 +251,96 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
+        ruleId: 'melodic-cell',
+        harmonicFunction: 'scale-step',
       });
 
       currentMidi = midi;
     }
 
-    // Fill remaining measure with scale steps
-    let beatPosition = cell.degrees.length * 0.5;
-    while (beatPosition < 4) {
-      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+    // Decide ending type: enclosure or proximity
+    const useEnclosure = !isLastMeasure && nextTarget && Math.random() < 0.5;
+
+    if (useEnclosure) {
+      // Fill middle with scale steps
+      for (let i = 4; i < 6; i++) {
+        currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+        notes.push({
+          startBeat: measureStart + i * 0.5,
+          durationBeats: 0.5,
+          midi: currentMidi,
+          velocity: 0.9,
+          device: 'melodic-cell-fill',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
+          ruleId: 'scale-step',
+          harmonicFunction: 'scale-step',
+        });
+      }
+
+      // Last 2 notes: enclosure
+      const targetMidi = nextTarget.midi;
+      const nextScalePcs = window.Scales.getScalePitchClasses(nextTarget.rootPc || rootPc, context.nextScale || scale);
+      const lowerNeighbor = targetMidi - 1;
+      const upperNeighbor = getUpperNeighbor(targetMidi, nextTarget.rootPc || rootPc, nextScalePcs);
+      const enclosureType = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
 
       notes.push({
-        startBeat: measureStart + beatPosition,
+        startBeat: measureStart + 3,
         durationBeats: 0.5,
-        midi: currentMidi,
+        midi: enclosureType === 'upper-lower' ? upperNeighbor : lowerNeighbor,
         velocity: 0.9,
-        device: 'melodic-cell-fill',
+        device: 'enclosure',
+        enclosureType: enclosureType === 'upper-lower' ? 'upper' : 'lower',
         chordSymbol: chord.symbol,
         rootPc,
         quality,
         scaleName: scale,
+        ruleId: 'enclosure',
+        harmonicFunction: enclosureType === 'upper-lower' ? 'scale-step' : 'chromatic',
       });
 
-      beatPosition += 0.5;
+      notes.push({
+        startBeat: measureStart + 3.5,
+        durationBeats: 0.5,
+        midi: enclosureType === 'upper-lower' ? lowerNeighbor : upperNeighbor,
+        velocity: 0.9,
+        device: 'enclosure',
+        enclosureType: enclosureType === 'upper-lower' ? 'lower' : 'upper',
+        chordSymbol: chord.symbol,
+        rootPc,
+        quality,
+        scaleName: scale,
+        ruleId: 'enclosure',
+        harmonicFunction: enclosureType === 'upper-lower' ? 'chromatic' : 'scale-step',
+      });
+    } else {
+      // Proximity ending: fill remaining with scale steps, ensuring last note is close to target
+      const notesToFill = isLastMeasure ? 2 : 4;
+      for (let i = 4; i < 4 + notesToFill; i++) {
+        if (i === 7 && nextTarget) {
+          // Last note: ensure proximity to next target
+          currentMidi = adjustToProximity(currentMidi, nextTarget.midi, scalePcs, Math.floor(currentMidi / 12));
+        } else {
+          currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+        }
+
+        notes.push({
+          startBeat: measureStart + i * 0.5,
+          durationBeats: 0.5,
+          midi: currentMidi,
+          velocity: 0.9,
+          device: 'melodic-cell-fill',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
+          ruleId: 'scale-step',
+          harmonicFunction: 'scale-step',
+        });
+      }
     }
 
     return notes;
@@ -170,21 +348,33 @@ window.DevicesNew = (function () {
 
   /**
    * Neighbor/Enclosure Device
-   * Focuses on approach to target note (first beat of next measure)
+   * Last 2 notes are enclosure pattern approaching next target
+   * Enclosure uses both lower (chromatic) and upper (diatonic) neighbors
    */
   function generateNeighborEnclosure(context) {
-    const { chord, rootPc, quality, scale, lastMidi, measureStart, nextChord } = context;
+    const { chord, rootPc, quality, scale, targetNote, nextTarget, isLastMeasure } = context;
+    const measureStart = targetNote.startBeat;
 
-    if (!window.Scales || !nextChord) {
+    if (!window.Scales || !nextTarget || isLastMeasure) {
       return generateArpeggio(context);
     }
 
     const scalePcs = window.Scales.getScalePitchClasses(rootPc, scale);
     const notes = [];
 
-    // Generate first part of measure (beats 1-2.5) with normal notes
-    let currentMidi = lastMidi;
-    for (let i = 0; i < 5; i++) {
+    // Start with target note
+    notes.push({
+      ...targetNote,
+      device: 'neighbor-approach',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+    });
+
+    // Fill first 6 notes with scale steps
+    let currentMidi = targetNote.midi;
+    for (let i = 1; i < 6; i++) {
       currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
 
       notes.push({
@@ -197,32 +387,24 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
+        ruleId: 'scale-step',
+        harmonicFunction: 'scale-step',
       });
     }
 
-    // Last 3 notes: enclosure approaching next measure
-    // Resolve target note from next chord
-    const nextRootPc = nextChord.rootPc;
-    const nextQuality = nextChord.quality;
-    const nextScale = nextChord.scale;
-    const nextScalePcs = window.Scales.getScalePitchClasses(nextRootPc, nextScale);
+    // Last 2 notes: enclosure approaching next target
+    const targetMidi = nextTarget.midi;
+    const nextScalePcs = window.Scales.getScalePitchClasses(nextTarget.rootPc || rootPc, context.nextScale || scale);
 
-    // Target: chord tone from next measure
-    const targetMidi = getRandomChordTone(currentMidi, nextRootPc, nextQuality);
+    const lowerNeighbor = targetMidi - 1; // chromatic (half-step below)
+    const upperNeighbor = getUpperNeighbor(targetMidi, nextTarget.rootPc || rootPc, nextScalePcs); // diatonic (scale step above)
 
-    // Calculate neighbors
-    const lowerNeighbor = targetMidi - 1; // half-step below
-    const upperNeighbor = getUpperNeighbor(targetMidi, nextRootPc, nextScalePcs);
-
-    // Decide enclosure type
     const enclosureType = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
 
-    // Slot 6: first approach
-    const slot6Midi = enclosureType === 'upper-lower' ? upperNeighbor : lowerNeighbor;
     notes.push({
       startBeat: measureStart + 3,
       durationBeats: 0.5,
-      midi: slot6Midi,
+      midi: enclosureType === 'upper-lower' ? upperNeighbor : lowerNeighbor,
       velocity: 0.9,
       device: 'enclosure',
       enclosureType: enclosureType === 'upper-lower' ? 'upper' : 'lower',
@@ -230,14 +412,14 @@ window.DevicesNew = (function () {
       rootPc,
       quality,
       scaleName: scale,
+      ruleId: 'enclosure',
+      harmonicFunction: enclosureType === 'upper-lower' ? 'scale-step' : 'chromatic',
     });
 
-    // Slot 7: second approach
-    const slot7Midi = enclosureType === 'upper-lower' ? lowerNeighbor : upperNeighbor;
     notes.push({
       startBeat: measureStart + 3.5,
       durationBeats: 0.5,
-      midi: slot7Midi,
+      midi: enclosureType === 'upper-lower' ? lowerNeighbor : upperNeighbor,
       velocity: 0.9,
       device: 'enclosure',
       enclosureType: enclosureType === 'upper-lower' ? 'lower' : 'upper',
@@ -245,6 +427,8 @@ window.DevicesNew = (function () {
       rootPc,
       quality,
       scaleName: scale,
+      ruleId: 'enclosure',
+      harmonicFunction: enclosureType === 'upper-lower' ? 'chromatic' : 'scale-step',
     });
 
     return notes;
@@ -252,12 +436,7 @@ window.DevicesNew = (function () {
 
   // ========== DEVICE SELECTION ==========
 
-  /**
-   * Select appropriate device for measure
-   */
   function selectDevice(context, strategy = 'varied') {
-    const { chord, quality } = context;
-
     switch (strategy) {
       case 'arpeggio-focused':
         return 'arpeggio';
@@ -273,7 +452,6 @@ window.DevicesNew = (function () {
 
       case 'varied':
       default:
-        // Random weighted selection
         const rand = Math.random();
         if (rand < 0.25) return 'arpeggio';
         if (rand < 0.50) return 'scale-run';
@@ -282,9 +460,6 @@ window.DevicesNew = (function () {
     }
   }
 
-  /**
-   * Generate notes for measure using selected device
-   */
   function generateMeasure(context, strategy = 'varied') {
     const deviceType = selectDevice(context, strategy);
 
@@ -305,48 +480,35 @@ window.DevicesNew = (function () {
   // ========== HELPER FUNCTIONS ==========
 
   function getChordPitchClasses(rootPc, quality) {
-    // Use LickGen if available
     if (window.LickGen) {
       return window.LickGen.chordPitchClasses(rootPc, quality);
     }
-
-    // Fallback
     return [0, 4, 7, 11];
-  }
-
-  function findNearestScaleNote(midi, rootPc, scalePcs) {
-    const scaleAbs = scalePcs.map(pc => (rootPc + pc) % 12);
-    const candidates = [];
-
-    for (let octave = -1; octave <= 2; octave++) {
-      for (const pc of scaleAbs) {
-        const note = 60 + octave * 12 + pc;
-        if (note >= 55 && note <= 81) {
-          candidates.push(note);
-        }
-      }
-    }
-
-    candidates.sort((a, b) => Math.abs(a - midi) - Math.abs(b - midi));
-    return candidates[0] || midi;
   }
 
   function nextScaleNote(midi, rootPc, scalePcs, direction = 1) {
     const pc = midi % 12;
     const scaleAbs = scalePcs.map(p => (rootPc + p) % 12);
 
-    // Find current position in scale
     let idx = scaleAbs.findIndex(p => p === pc);
     if (idx === -1) {
-      // Not on scale, find nearest
-      return findNearestScaleNote(midi, rootPc, scalePcs);
+      // Find nearest scale note
+      const candidates = [];
+      for (let octave = -1; octave <= 2; octave++) {
+        for (const spc of scaleAbs) {
+          const note = 60 + octave * 12 + spc;
+          if (note >= 55 && note <= 81) {
+            candidates.push(note);
+          }
+        }
+      }
+      candidates.sort((a, b) => Math.abs(a - midi) - Math.abs(b - midi));
+      return candidates[0] || midi;
     }
 
-    // Move to next/prev scale note
     idx = (idx + direction + scaleAbs.length) % scaleAbs.length;
     const nextPc = scaleAbs[idx];
 
-    // Adjust octave if needed
     let nextMidi = Math.floor(midi / 12) * 12 + nextPc;
 
     if (direction > 0 && nextMidi <= midi) {
@@ -355,25 +517,11 @@ window.DevicesNew = (function () {
       nextMidi -= 12;
     }
 
+    // Clamp to range
+    while (nextMidi < 55) nextMidi += 12;
+    while (nextMidi > 81) nextMidi -= 12;
+
     return nextMidi;
-  }
-
-  function getRandomChordTone(nearMidi, rootPc, quality) {
-    const chordPcs = getChordPitchClasses(rootPc, quality);
-    const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
-
-    const candidates = [];
-    for (let octave = -1; octave <= 2; octave++) {
-      for (const pc of chordAbs) {
-        const midi = 60 + octave * 12 + pc;
-        if (midi >= 55 && midi <= 81) {
-          candidates.push(midi);
-        }
-      }
-    }
-
-    candidates.sort((a, b) => Math.abs(a - nearMidi) - Math.abs(b - nearMidi));
-    return candidates[0] || nearMidi;
   }
 
   function getUpperNeighbor(targetMidi, rootPc, scalePcs) {
@@ -392,6 +540,45 @@ window.DevicesNew = (function () {
 
     candidates.sort((a, b) => a - b);
     return candidates[0] || targetMidi + 1;
+  }
+
+  function adjustToProximity(currentMidi, targetMidi, scalePcsOrAbs, currentOctave) {
+    // Adjust current note to be within 2 semitones of target
+    const distance = Math.abs(currentMidi - targetMidi);
+    if (distance <= 2) return currentMidi;
+
+    // Find closest note within 2 semitones
+    const candidates = [];
+    for (let offset = -2; offset <= 2; offset++) {
+      const midi = targetMidi + offset;
+      if (midi >= 55 && midi <= 81) {
+        candidates.push(midi);
+      }
+    }
+
+    candidates.sort((a, b) => Math.abs(a - currentMidi) - Math.abs(b - currentMidi));
+    return candidates[0] || currentMidi;
+  }
+
+  function generateScaleApproach(startMidi, targetMidi, scalePcs, rootPc, noteCount) {
+    // Generate scale steps that approach target
+    const scaleAbs = scalePcs.map(pc => (rootPc + pc) % 12);
+    const direction = targetMidi > startMidi ? 1 : -1;
+    const notes = [];
+
+    let currentMidi = startMidi;
+    for (let i = 0; i < noteCount; i++) {
+      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, direction);
+
+      // Don't go past or reach the target
+      if ((direction > 0 && currentMidi >= targetMidi) || (direction < 0 && currentMidi <= targetMidi)) {
+        currentMidi = targetMidi + (direction * -1 * (i + 1)); // Step back
+      }
+
+      notes.push(currentMidi);
+    }
+
+    return notes;
   }
 
   return {

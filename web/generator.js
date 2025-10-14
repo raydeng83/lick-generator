@@ -1,7 +1,6 @@
-// New generation system based on Generation-Steps.md
-// Step 1: Put chord tone on first note of each measure (not all strong beats)
-// Step 2: Pick devices for each measure
-// Step 3: Add variation based on chord quality
+// Target-first generation system
+// Phase 1: Pre-fill first note of each measure with chord tone (targets)
+// Phase 2: Devices work backwards from targets to fill remaining notes
 
 window.LickGen = (function () {
   // ========== PITCH HELPERS ==========
@@ -103,79 +102,87 @@ window.LickGen = (function () {
     return midi;
   }
 
-  // ========== STEP 1: ANALYZE MEASURES ==========
+  // ========== PHASE 1: PRE-FILL TARGETS ==========
 
-  function analyzeMeasures(progression, metadata) {
-    // Analyze each measure in the progression
-    const totalBars = Math.max(0, ...progression.map(p => p.bar)) + 1;
-    const measures = [];
+  /**
+   * Pre-fill first note of each measure with a random chord tone
+   * This defines all target notes upfront before device generation
+   */
+  function prefillTargets(measures, options = {}) {
+    const { startPitch = 64 } = options;
+    let lastMidi = startPitch;
 
-    for (let bar = 0; bar < totalBars; bar++) {
-      // Find chord for this measure
-      const measureStart = bar * 4;
-      const seg = findChordAtBeat(progression, measureStart);
+    return measures.map((measure, idx) => {
+      // Get random chord tone near lastMidi
+      const chordPcs = chordPitchClasses(measure.rootPc, measure.quality);
+      const chordAbs = chordPcs.map(pc => (measure.rootPc + pc) % 12);
 
-      const rootPc = parseRoot(seg.symbol) ?? 0;
-      const quality = parseQuality(seg.symbol);
-
-      // Select scale for this chord
-      const scaleName = window.Scales ? window.Scales.selectScale(quality, 'default') : 'major';
-
-      measures.push({
-        bar,
-        measureStart,
-        chord: seg,
-        rootPc,
-        quality,
-        scale: scaleName,
-      });
-    }
-
-    return measures;
-  }
-
-  // ========== STEP 2: APPLY VARIATIONS ==========
-
-  function applyVariations(measures, options = {}) {
-    // Use Variations module if available
-    if (window.Variations) {
-      return window.Variations.applyVariations(measures, options);
-    }
-
-    // Fallback: no variations
-    return measures.map(m => ({
-      ...m,
-      variations: {
-        firstBeatConstraint: 'chord-tone',
-        firstBeatOptions: null,
-        secondBeatFree: false,
+      // Build all chord tone candidates in range
+      const candidates = [];
+      for (let octave = -1; octave <= 2; octave++) {
+        for (const pc of chordAbs) {
+          const midi = 60 + octave * 12 + pc;
+          if (midi >= 55 && midi <= 81) {
+            candidates.push(midi);
+          }
+        }
       }
-    }));
+
+      // Sort by distance and pick with weighted randomness
+      candidates.sort((a, b) => Math.abs(a - lastMidi) - Math.abs(b - lastMidi));
+
+      // Weighted selection: prefer closer notes but allow variety
+      const rand = Math.random();
+      let targetMidi;
+      if (rand < 0.5 && candidates.length >= 2) {
+        // 50%: pick from closest 2
+        targetMidi = candidates[Math.floor(Math.random() * Math.min(2, candidates.length))];
+      } else if (rand < 0.8 && candidates.length >= 4) {
+        // 30%: pick from next 2
+        targetMidi = candidates[2 + Math.floor(Math.random() * Math.min(2, candidates.length - 2))];
+      } else {
+        // 20%: pick from any remaining
+        targetMidi = candidates[Math.floor(Math.random() * candidates.length)];
+      }
+
+      lastMidi = targetMidi;
+
+      // Calculate degree for target note
+      const degree = getChordDegree(targetMidi, measure.rootPc, chordPcs);
+
+      return {
+        ...measure,
+        targetNote: {
+          midi: targetMidi,
+          degree,
+          startBeat: measure.measureStart,
+          durationBeats: 0.5,
+          velocity: 0.9,
+          ruleId: 'chord-tone',
+          harmonicFunction: 'chord-tone',
+        },
+      };
+    });
   }
 
-  // ========== STEP 3: DEVICE SELECTION ==========
+  // ========== PHASE 2: DEVICE SELECTION ==========
 
   function selectDevicesForMeasures(measures, options = {}) {
     const { deviceStrategy = 'varied' } = options;
 
     return measures.map((measure, idx) => {
-      // Get next measure for enclosure device
       const nextMeasure = idx < measures.length - 1 ? measures[idx + 1] : null;
 
-      // Build context for device selection
       const context = {
         chord: measure.chord,
         rootPc: measure.rootPc,
         quality: measure.quality,
         scale: measure.scale,
-        nextChord: nextMeasure ? {
-          rootPc: nextMeasure.rootPc,
-          quality: nextMeasure.quality,
-          scale: nextMeasure.scale,
-        } : null,
+        targetNote: measure.targetNote,
+        nextTarget: nextMeasure ? nextMeasure.targetNote : null,
+        isLastMeasure: idx === measures.length - 1,
       };
 
-      // Select device using new system
       let device = null;
       if (window.DevicesNew) {
         device = window.DevicesNew.selectDevice(context, deviceStrategy);
@@ -189,34 +196,26 @@ window.LickGen = (function () {
     });
   }
 
-  // ========== STEP 4: GENERATE WITH DEVICES ==========
+  // ========== PHASE 3: GENERATE BACKWARDS FROM TARGETS ==========
 
-  function generateWithDevices(measures, options = {}) {
-    const { startPitch = 64 } = options;
+  function generateWithTargets(measures, options = {}) {
     const allNotes = [];
-    let lastMidi = startPitch;
 
     for (let i = 0; i < measures.length; i++) {
       const measure = measures[i];
-      const context = {
-        ...measure.context,
-        lastMidi,
-        measureStart: measure.measureStart,
-      };
 
       // Generate notes for this measure using device
       let measureNotes = [];
       if (window.DevicesNew && measure.device) {
-        measureNotes = window.DevicesNew.generateMeasure(context, measure.device);
+        measureNotes = window.DevicesNew.generateMeasure(measure.context, measure.device);
       } else {
-        // Fallback: simple chord tone + scale pattern
-        measureNotes = generateSimpleMeasure(measure, lastMidi);
+        // Fallback: simple pattern
+        measureNotes = generateSimpleMeasure(measure);
       }
 
       // Add to result
       for (const note of measureNotes) {
         allNotes.push(note);
-        lastMidi = note.midi;
       }
     }
 
@@ -225,101 +224,76 @@ window.LickGen = (function () {
 
   // ========== FALLBACK: SIMPLE MEASURE GENERATION ==========
 
-  function generateSimpleMeasure(measure, lastMidi) {
-    const { measureStart, rootPc, quality, scale, chord } = measure;
+  function generateSimpleMeasure(measure) {
+    const { measureStart, rootPc, quality, scale, chord, targetNote } = measure;
     const notes = [];
 
-    // Generate 8 eighth notes
+    // Start with target note
+    notes.push({
+      ...targetNote,
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+    });
+
+    // Fill remaining 7 notes with scale steps
     const scalePcs = window.Scales
       ? window.Scales.getScalePitchClasses(rootPc, scale)
       : [0, 2, 4, 5, 7, 9, 11];
 
-    let currentMidi = lastMidi;
+    let currentMidi = targetNote.midi;
 
-    for (let i = 0; i < 8; i++) {
-      const isStrongBeat = (i % 4 === 0);
-      let midi;
-      let ruleId;
-      let harmonicFunction;
-      let degree = null;
+    for (let i = 1; i < 8; i++) {
+      const scaleAbs = scalePcs.map(pc => (rootPc + pc) % 12);
+      const currentPc = currentMidi % 12;
 
-      if (isStrongBeat) {
-        // Chord tone on strong beats
-        const chordPcs = chordPitchClasses(rootPc, quality);
-        const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
-
+      let idx = scaleAbs.findIndex(pc => pc === currentPc);
+      if (idx === -1) {
+        // Find nearest scale note
         const candidates = [];
         for (let octave = -1; octave <= 2; octave++) {
-          for (const pc of chordAbs) {
+          for (const pc of scaleAbs) {
             const note = 60 + octave * 12 + pc;
             if (note >= 55 && note <= 81) {
               candidates.push(note);
             }
           }
         }
-
         candidates.sort((a, b) => Math.abs(a - currentMidi) - Math.abs(b - currentMidi));
-        midi = candidates[0] || currentMidi;
-        ruleId = 'chord-tone';
-        harmonicFunction = 'chord-tone';
-        degree = getChordDegree(midi, rootPc, chordPcs);
+        currentMidi = candidates[0] || currentMidi;
       } else {
-        // Scale step on weak beats
-        const scaleAbs = scalePcs.map(pc => (rootPc + pc) % 12);
-        const currentPc = currentMidi % 12;
+        // Move to next scale note
+        const direction = Math.random() < 0.5 ? 1 : -1;
+        const nextIdx = (idx + direction + scaleAbs.length) % scaleAbs.length;
+        const nextPc = scaleAbs[nextIdx];
 
-        let idx = scaleAbs.findIndex(pc => pc === currentPc);
-        if (idx === -1) {
-          // Find nearest scale note
-          const candidates = [];
-          for (let octave = -1; octave <= 2; octave++) {
-            for (const pc of scaleAbs) {
-              const note = 60 + octave * 12 + pc;
-              if (note >= 55 && note <= 81) {
-                candidates.push(note);
-              }
-            }
-          }
-          candidates.sort((a, b) => Math.abs(a - currentMidi) - Math.abs(b - currentMidi));
-          midi = candidates[0] || currentMidi;
-        } else {
-          // Move to next scale note
-          const direction = Math.random() < 0.5 ? 1 : -1;
-          const nextIdx = (idx + direction + scaleAbs.length) % scaleAbs.length;
-          const nextPc = scaleAbs[nextIdx];
-
-          let nextMidi = Math.floor(currentMidi / 12) * 12 + nextPc;
-          if (direction > 0 && nextMidi <= currentMidi) {
-            nextMidi += 12;
-          } else if (direction < 0 && nextMidi >= currentMidi) {
-            nextMidi -= 12;
-          }
-
-          while (nextMidi < 55) nextMidi += 12;
-          while (nextMidi > 81) nextMidi -= 12;
-
-          midi = nextMidi;
+        let nextMidi = Math.floor(currentMidi / 12) * 12 + nextPc;
+        if (direction > 0 && nextMidi <= currentMidi) {
+          nextMidi += 12;
+        } else if (direction < 0 && nextMidi >= currentMidi) {
+          nextMidi -= 12;
         }
 
-        ruleId = 'scale-step';
-        harmonicFunction = 'scale-step';
+        while (nextMidi < 55) nextMidi += 12;
+        while (nextMidi > 81) nextMidi -= 12;
+
+        currentMidi = nextMidi;
       }
 
       notes.push({
         startBeat: measureStart + i * 0.5,
         durationBeats: 0.5,
-        midi,
+        midi: currentMidi,
         velocity: 0.9,
-        ruleId,
-        harmonicFunction,
-        degree,
+        ruleId: 'scale-step',
+        harmonicFunction: 'scale-step',
+        degree: null,
         scaleName: scale,
         chordSymbol: chord.symbol,
         rootPc,
         quality,
       });
-
-      currentMidi = midi;
     }
 
     return notes;
@@ -328,36 +302,52 @@ window.LickGen = (function () {
   // ========== POST-PROCESSING ==========
 
   function postProcess(notes, options = {}) {
-    // Add any post-processing here
-    // For now, just return notes as-is
     return notes;
   }
 
   // ========== MAIN GENERATOR ==========
 
   function generateLick(progression, metadata, options = {}) {
-    console.log('[Generator] New system - Starting generation');
+    console.log('[Generator] Target-first system - Starting generation');
     console.log('[Generator] Options:', options);
 
     // Step 1: Analyze measures
-    const measures = analyzeMeasures(progression, metadata);
+    const totalBars = Math.max(0, ...progression.map(p => p.bar)) + 1;
+    const measures = [];
+
+    for (let bar = 0; bar < totalBars; bar++) {
+      const measureStart = bar * 4;
+      const seg = findChordAtBeat(progression, measureStart);
+      const rootPc = parseRoot(seg.symbol) ?? 0;
+      const quality = parseQuality(seg.symbol);
+      const scaleName = window.Scales ? window.Scales.selectScale(quality, 'default') : 'major';
+
+      measures.push({
+        bar,
+        measureStart,
+        chord: seg,
+        rootPc,
+        quality,
+        scale: scaleName,
+      });
+    }
     console.log('[Generator] Step 1: Analyzed', measures.length, 'measures');
 
-    // Step 2: Apply variations (Step 3 from Generation-Steps.md)
-    const varied = applyVariations(measures, options);
-    console.log('[Generator] Step 2: Applied variations');
+    // Phase 1: Pre-fill target notes (first note of each measure)
+    const withTargets = prefillTargets(measures, options);
+    console.log('[Generator] Phase 1: Pre-filled target notes');
 
-    // Step 3: Select devices (Step 2 from Generation-Steps.md)
-    const devicePlanned = selectDevicesForMeasures(varied, options);
-    console.log('[Generator] Step 3: Selected devices for each measure');
+    // Phase 2: Select devices
+    const devicePlanned = selectDevicesForMeasures(withTargets, options);
+    console.log('[Generator] Phase 2: Selected devices for each measure');
 
-    // Step 4: Generate notes using devices
-    const notes = generateWithDevices(devicePlanned, options);
-    console.log('[Generator] Step 4: Generated', notes.length, 'notes');
+    // Phase 3: Generate backwards from targets
+    const notes = generateWithTargets(devicePlanned, options);
+    console.log('[Generator] Phase 3: Generated', notes.length, 'notes');
 
-    // Step 5: Post-process
+    // Phase 4: Post-process
     const final = postProcess(notes, options);
-    console.log('[Generator] Step 5: Post-processing complete');
+    console.log('[Generator] Phase 4: Post-processing complete');
 
     return final;
   }
@@ -396,11 +386,9 @@ window.LickGen = (function () {
     generateLick,
     parseRoot,
     parseQuality,
-    chordPitchClasses, // Export for devices-new.js
-    // Expose pipeline stages for testing/debugging
-    analyzeMeasures,
-    applyVariations,
+    chordPitchClasses,
+    prefillTargets,
     selectDevicesForMeasures,
-    generateWithDevices,
+    generateWithTargets,
   };
 })();
