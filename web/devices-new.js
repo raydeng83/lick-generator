@@ -417,7 +417,7 @@ window.DevicesNew = (function () {
 
     // Helper: Get valid ending notes (root, 3rd, 5th only)
     // For maj7 chord: root=0, 3rd=4, 5th=7
-    const getValidEndingNote = (nearMidi) => {
+    const getValidEndingNote = (nearMidi, excludeMidi = []) => {
       const validIntervals = [0, 4, 7]; // root, 3rd, 5th
       const validPcs = validIntervals.map(interval => (rootPc + interval) % 12);
 
@@ -433,6 +433,15 @@ window.DevicesNew = (function () {
 
       // Sort by distance from nearMidi
       candidates.sort((a, b) => Math.abs(a - nearMidi) - Math.abs(b - nearMidi));
+
+      // Return first candidate that's not excluded
+      for (const midi of candidates) {
+        if (!excludeMidi.includes(midi)) {
+          return midi;
+        }
+      }
+
+      // If all candidates are excluded, return the first one (fallback)
       return candidates[0] || nearMidi;
     };
 
@@ -458,8 +467,8 @@ window.DevicesNew = (function () {
         const isLastSlot = (i === totalSlots - 1);
 
         if (isLastSlot) {
-          // Last note: must be root/3rd/5th
-          currentMidi = getValidEndingNote(currentMidi);
+          // Last note: must be root/3rd/5th (avoid duplicating previous note)
+          currentMidi = getValidEndingNote(currentMidi, [currentMidi]);
         } else {
           // Fill with scale steps
           currentMidi = avoidConsecutiveDuplicate(
@@ -588,8 +597,8 @@ window.DevicesNew = (function () {
         const isLastSlot = (i === additionalSlots - 1);
 
         if (isLastSlot) {
-          // Last note: must be root/3rd/5th
-          currentMidi = getValidEndingNote(currentMidi);
+          // Last note: must be root/3rd/5th (avoid duplicating previous note)
+          currentMidi = getValidEndingNote(currentMidi, [currentMidi]);
         } else {
           // Fill with scale steps
           currentMidi = avoidConsecutiveDuplicate(
