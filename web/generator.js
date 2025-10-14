@@ -264,7 +264,187 @@ window.LickGen = (function () {
   // ========== PIPELINE STAGE 3: PITCH REALIZATION ==========
 
   function realizePitches(functionalPhrase, options = {}) {
-    const { startPitch = 64, range = [55, 81] } = options;
+    const { startPitch = 64, range = [55, 81], useDevices = false } = options;
+    let lastMidi = startPitch;
+
+    // If devices are enabled and present, use device-based realization
+    if (useDevices && functionalPhrase.length > 0 && functionalPhrase[0].device) {
+      return realizeWithDevices(functionalPhrase, startPitch, range);
+    }
+
+    // Otherwise, use original Rules 1-4 realization
+    return realizeWithRules(functionalPhrase, startPitch, range);
+  }
+
+  // ========== DEVICE-BASED REALIZATION ==========
+
+  function realizeWithDevices(functionalPhrase, startPitch, range) {
+    const result = [];
+    let lastMidi = startPitch;
+
+    // Process each measure with its device
+    for (let measureStart = 0; measureStart < functionalPhrase.length; measureStart += 8) {
+      const measureEnd = Math.min(measureStart + 8, functionalPhrase.length);
+      const measureSlots = functionalPhrase.slice(measureStart, measureEnd);
+
+      if (measureSlots.length === 0) continue;
+
+      const device = measureSlots[0].device;
+
+      // Realize this measure using the device as a guide
+      const measureNotes = realizeMeasureWithDevice(measureSlots, device, lastMidi, range);
+
+      for (const note of measureNotes) {
+        result.push(note);
+        lastMidi = note.midi;
+      }
+    }
+
+    return result;
+  }
+
+  function realizeMeasureWithDevice(slots, device, startMidi, range) {
+    if (!device || device.type === 'chord-tones') {
+      // No device - use Rules 1-4 for each slot
+      let lastMidi = startMidi;
+      return slots.map((slot, idx) => {
+        const note = realizeSingleNote(slot, lastMidi, slots, idx, range);
+        lastMidi = note.midi;
+        return note;
+      });
+    }
+
+    // Device influences melodic direction/pattern but keeps all slots
+    let lastMidi = startMidi;
+    const result = [];
+
+    switch (device.type) {
+      case 'arpeggio':
+        // Arpeggio: cycle through chord tones on strong beats, fill weak beats with passing tones
+        for (let i = 0; i < slots.length; i++) {
+          const slot = slots[i];
+          const isStrongBeat = (slot.slot % 4 === 0); // beats 1, 3
+
+          if (isStrongBeat && device.pattern) {
+            // Use arpeggio pattern for strong beats
+            const patternIdx = Math.floor(i / 2) % device.pattern.length;
+            const degree = device.pattern[patternIdx];
+            const chordToneNote = { ...slot, targetDegree: degree };
+            const result_ct = resolveChordTone(chordToneNote, lastMidi);
+
+            result.push({
+              ...slot,
+              midi: result_ct.midi,
+              velocity: 0.9,
+              ruleId: 'arpeggio-chord-tone',
+              harmonicFunction: 'chord-tone',
+              degree: result_ct.degree,
+            });
+            lastMidi = result_ct.midi;
+          } else {
+            // Weak beats: scale steps connecting arpeggio tones
+            const realized = realizeSingleNote(slot, lastMidi, slots, i, range);
+            result.push(realized);
+            lastMidi = realized.midi;
+          }
+        }
+        break;
+
+      case 'scale-run':
+        // Scale run: continuous stepwise motion in one direction
+        const direction = device.direction === 'up' ? 1 : -1;
+        for (let i = 0; i < slots.length; i++) {
+          const slot = slots[i];
+          const isStrongBeat = (slot.slot % 4 === 0);
+
+          if (isStrongBeat) {
+            // Strong beat: chord tone (Rule 1)
+            const result_ct = resolveChordTone(slot, lastMidi);
+            result.push({
+              ...slot,
+              midi: result_ct.midi,
+              velocity: 0.9,
+              ruleId: 'scale-run-chord-tone',
+              harmonicFunction: 'chord-tone',
+              degree: result_ct.degree,
+            });
+            lastMidi = result_ct.midi;
+          } else {
+            // Weak beat: scale step in device direction
+            const scalePcs = scalePitchClasses(slot.rootPc, slot.quality, slot.scaleName);
+            const midi = scaleStep(lastMidi, slot.rootPc, scalePcs, direction);
+            result.push({
+              ...slot,
+              midi,
+              velocity: 0.9,
+              ruleId: 'scale-run',
+              harmonicFunction: 'scale-step',
+              degree: null,
+            });
+            lastMidi = midi;
+          }
+        }
+        break;
+
+      case 'melodic-cell':
+        // Melodic cell: use cell pattern for first 4 notes, then fill remaining
+        const cellDegrees = device.cellDegrees || [1, 2, 3, 5];
+        for (let i = 0; i < slots.length; i++) {
+          const slot = slots[i];
+          const isStrongBeat = (slot.slot % 4 === 0);
+
+          if (i < cellDegrees.length) {
+            // Use cell pattern for first N notes
+            const degree = cellDegrees[i];
+            const scalePcs = scalePitchClasses(slot.rootPc, slot.quality, slot.scaleName);
+            const midi = window.MelodicCells
+              ? window.MelodicCells.degreeToMidi(degree, slot.rootPc, scalePcs, lastMidi)
+              : lastMidi;
+
+            result.push({
+              ...slot,
+              midi,
+              velocity: 0.9,
+              ruleId: 'melodic-cell',
+              harmonicFunction: isStrongBeat ? 'chord-tone' : 'scale-step',
+              degree: String(degree),
+            });
+            lastMidi = midi;
+          } else {
+            // Fill remaining slots with Rules 1-4
+            const realized = realizeSingleNote(slot, lastMidi, slots, i, range);
+            result.push(realized);
+            lastMidi = realized.midi;
+          }
+        }
+        break;
+
+      case 'neighbor':
+      case 'enclosure':
+        // These devices apply locally - use Rules 1-4 with device influence
+        for (let i = 0; i < slots.length; i++) {
+          const realized = realizeSingleNote(slots[i], lastMidi, slots, i, range);
+          result.push(realized);
+          lastMidi = realized.midi;
+        }
+        break;
+
+      default:
+        // Unknown device - fall back to Rules 1-4
+        for (let i = 0; i < slots.length; i++) {
+          const realized = realizeSingleNote(slots[i], lastMidi, slots, i, range);
+          result.push(realized);
+          lastMidi = realized.midi;
+        }
+    }
+
+    return result;
+  }
+
+
+  // ========== RULES 1-4 REALIZATION ==========
+
+  function realizeWithRules(functionalPhrase, startPitch, range) {
     let lastMidi = startPitch;
 
     // First pass: resolve all chord tones
@@ -324,6 +504,51 @@ window.LickGen = (function () {
         chordSymbol: note.chordSymbol, // Pass chord symbol
       };
     });
+  }
+
+  function realizeSingleNote(note, lastMidi, phrase, idx, range) {
+    // Realize a single note using Rules 1-4
+    // If lastMidi is null, use the default
+    const refMidi = lastMidi !== null && lastMidi !== undefined ? lastMidi : 64;
+    let midi;
+    let degree = null;
+    const nextNote = phrase[idx + 1];
+
+    if (note.function === 'chord-tone') {
+      const result = resolveChordTone(note, refMidi);
+      midi = result.midi;
+      degree = result.degree;
+    } else if (note.function === 'chromatic-below') {
+      const targetResult = nextNote ? resolveChordTone(nextNote, refMidi) : { midi: refMidi };
+      midi = targetResult.midi - 1;
+    } else if (note.function === 'scale-step') {
+      // Find next chord tone for navigation
+      const nextChordToneIdx = findNextChordTone(phrase, idx);
+      if (nextChordToneIdx !== -1) {
+        const targetChordTone = phrase[nextChordToneIdx];
+        const targetResult = resolveChordTone(targetChordTone, refMidi);
+        const stepsToTarget = nextChordToneIdx - idx;
+        midi = navigateTowardTarget(refMidi, targetResult.midi, note, stepsToTarget);
+      } else {
+        midi = resolveScaleStep(note, refMidi);
+      }
+    } else {
+      midi = refMidi;
+    }
+
+    midi = constrainToRange(midi, refMidi, range);
+
+    return {
+      startBeat: note.startBeat,
+      durationBeats: note.durationBeats,
+      midi,
+      velocity: 0.9,
+      ruleId: note.function,
+      harmonicFunction: note.function,
+      degree,
+      scaleName: note.scaleName,
+      chordSymbol: note.chordSymbol,
+    };
   }
 
   // ========== STRATEGY SELECTION ==========
