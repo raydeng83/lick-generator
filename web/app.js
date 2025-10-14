@@ -26,7 +26,7 @@
   // Seed example progression
   ui.progression.value = ui.progression.value || "Dm7 | G7 | Cmaj7";
 
-  // Update swing display and regenerate
+  // Update swing display only (don't regenerate)
   function updateSwingDisplay() {
     const value = parseFloat(ui.swing.value);
     const percent = Math.round(value * 100);
@@ -39,25 +39,56 @@
     }
   }
 
-  function regenerateWithSwing() {
-    updateSwingDisplay();
-    // Regenerate immediately when swing changes
-    try {
-      const model = buildModel();
-      renderAll(model);
-      setStatus("Generated with swing.");
-    } catch (e) {
-      console.error(e);
-      setStatus("Error generating lick.");
-    }
-  }
-
-  ui.swing.addEventListener("input", regenerateWithSwing);
+  ui.swing.addEventListener("input", updateSwingDisplay);
   updateSwingDisplay();
 
   let lastModel = null;
 
   function setStatus(s) { ui.status.textContent = s; }
+
+  // Apply swing timing to a lick (without regenerating notes)
+  function applySwingToLick(lick, swingRatio) {
+    if (swingRatio === 0 || !lick || lick.length === 0) {
+      return lick;
+    }
+
+    const swung = [];
+    for (let i = 0; i < lick.length; i++) {
+      const note = lick[i];
+      const nextNote = i < lick.length - 1 ? lick[i + 1] : null;
+
+      // Check if this is an eighth note pair (both 0.5 beats)
+      const isEighthNote = note.durationBeats === 0.5;
+      const isOnBeat = isEighthNote && (note.startBeat % 1 === 0);
+      const hasNextEighthNote = nextNote && nextNote.durationBeats === 0.5 &&
+                                 nextNote.startBeat === note.startBeat + 0.5;
+
+      if (isOnBeat && hasNextEighthNote) {
+        // Apply swing to this pair
+        const swingOffset = swingRatio * (1/6);
+
+        // Lengthen first note
+        swung.push({
+          ...note,
+          durationBeats: 0.5 + swingOffset,
+        });
+
+        // Shorten and delay second note
+        swung.push({
+          ...nextNote,
+          startBeat: note.startBeat + 0.5 + swingOffset,
+          durationBeats: 0.5 - swingOffset,
+        });
+
+        i++; // Skip next note since we've processed it
+      } else {
+        // Not part of a swung pair, keep as-is
+        swung.push(note);
+      }
+    }
+
+    return swung;
+  }
 
   function buildModel() {
     const meta = Schema.defaultMetadata();
@@ -66,12 +97,11 @@
 
     // Pass scale and device strategies to generator
     const deviceStrategyValue = ui.deviceStrategy.value || 'disabled';
-    const swingValue = parseFloat(ui.swing.value) || 0;
     const options = {
       scaleStrategy: ui.scaleStrategy.value || 'default',
       deviceStrategy: deviceStrategyValue,
       useDevices: deviceStrategyValue !== 'disabled',
-      swing: swingValue
+      swing: 0  // Always generate with straight timing (swing applied at playback)
     };
 
     const lick = LickGen.generateLick(progression, meta, options);
@@ -102,12 +132,26 @@
         const model = buildModel();
         renderAll(model);
       }
+
+      // Apply swing to the existing lick before playing
+      const swingValue = parseFloat(ui.swing.value) || 0;
+      console.log('[App] Applying swing:', swingValue);
+      const lickToPlay = applySwingToLick(lastModel.lick, swingValue);
+      console.log('[App] Original lick length:', lastModel.lick.length);
+      console.log('[App] Swung lick length:', lickToPlay.length);
+      if (lickToPlay.length > 0) {
+        console.log('[App] First note duration:', lickToPlay[0].durationBeats);
+        if (lickToPlay.length > 1) {
+          console.log('[App] Second note duration:', lickToPlay[1].durationBeats);
+        }
+      }
+
       const instrumentName = ui.instrument.value;
       const needsLoading = instrumentName !== 'synth';
 
       setStatus(needsLoading ? "Loading samples..." : "Playing...");
       await AudioEngine.play({
-        lick: lastModel.lick,
+        lick: lickToPlay,
         metadata: lastModel.metadata,
         metronome: ui.metronome.checked,
         instrument: instrumentName,
