@@ -523,6 +523,29 @@ window.LickGen = (function () {
           }
         }
 
+        // Pre-resolve all target chord tones for enclosures to ensure consistency
+        // Map from target strong beat slot index to resolved target
+        // Both enclosure approach notes should use the SAME resolved target
+        const enclosureTargets = new Map();
+
+        for (let i = 0; i < slots.length; i++) {
+          const isStrongBeat = (slots[i].slot % 4 === 0);
+
+          if (isStrongBeat && (enclosureTargets.size === 0 || !enclosureTargets.has(i))) {
+            // Check if this strong beat has an enclosure approaching it
+            const hasEnclosure = (i >= 2 && enclosureSlots.has(i - 2) && enclosureSlots.has(i - 1)) ||
+                                 (i === 0 && slots.length >= 8 && enclosureSlots.has(slots.length - 2));
+
+            if (hasEnclosure) {
+              // Resolve the target once for this strong beat
+              // Use lastMidi from before the enclosure starts (slot i-2 or earlier)
+              const refMidi = i >= 2 ? lastMidi : startMidi;
+              const target = resolveChordTone(slots[i], refMidi);
+              enclosureTargets.set(i, { targetSlot: slots[i], target });
+            }
+          }
+        }
+
         // Second pass: realize all slots
         for (let i = 0; i < slots.length; i++) {
           const slot = slots[i];
@@ -530,20 +553,20 @@ window.LickGen = (function () {
 
           if (enclosureSlots.has(i)) {
             // This slot is part of an enclosure approaching a strong beat
-            // Determine if this is the first or second approach note
             const isFirstApproach = enclosureSlots.has(i + 1);
 
-            // Determine target slot
-            let targetSlot;
+            // Find which strong beat this enclosure is approaching
+            let targetIdx;
             if (i >= slots.length - 2 && fullPhrase && measureStart + 8 < fullPhrase.length) {
-              // End of measure (slots 6-7): target is first slot of NEXT measure
-              targetSlot = fullPhrase[measureStart + 8];
+              // End of measure: approaching first beat of NEXT measure
+              targetIdx = 0; // Will look up in enclosureTargets for this measure's target
             } else {
-              // Within measure: target is i+1 or i+2
-              targetSlot = isFirstApproach ? slots[i + 2] : slots[i + 1];
+              // Within measure: approaching slot i+2 (if first approach) or i+1 (if second approach)
+              targetIdx = isFirstApproach ? i + 2 : i + 1;
             }
 
-            const target = resolveChordTone(targetSlot, lastMidi);
+            // Get pre-resolved target
+            const { targetSlot, target } = enclosureTargets.get(targetIdx);
 
             // Determine which neighbor to use based on enclosure type and position
             const enclosureType = device.enclosureType || 'upper-lower';
@@ -962,8 +985,8 @@ window.LickGen = (function () {
     for (let octave = -1; octave <= 1; octave++) {
       for (const pc of scaleAbs) {
         const midi = targetMidi + octave * 12 + ((pc - targetPc + 12) % 12);
-        if (midi > targetMidi && midi <= targetMidi + 12) {
-          // Only include notes strictly above target, within one octave
+        if (midi > targetMidi && midi < targetMidi + 12) {
+          // Only include notes strictly above target, within one octave (not including octave)
           candidates.push(midi);
         }
       }
