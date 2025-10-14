@@ -121,8 +121,10 @@ window.Notate = (function () {
         // Add accidentals following standard notation rules:
         // - Only show accidental if it hasn't been shown yet in this measure
         // - Accidentals carry through the measure for the same pitch+octave
-        const hasSharp = key.includes('#');
-        const hasFlat = key.includes('b');
+        // Extract note name (before the slash) to check for accidentals
+        const noteName = key.split('/')[0]; // e.g., "b", "c#", "bb", "eb"
+        const hasSharp = noteName.includes('#');
+        const hasFlat = noteName.includes('b') && noteName.length > 1; // "bb" or "eb", but not "b"
 
         if (hasSharp || hasFlat) {
           const pitchKey = key; // e.g., "c#/4" or "bb/5"
