@@ -32,9 +32,14 @@ window.Notate = (function () {
   function durationFromBeats(beats) {
     if (Math.abs(beats - 0.5) < 1e-6) return "8"; // eighth
     if (Math.abs(beats - 1) < 1e-6) return "q"; // quarter
+    if (Math.abs(beats - 1.5) < 1e-6) return "qd"; // dotted quarter (3 eighths)
     if (Math.abs(beats - 2) < 1e-6) return "h"; // half
+    if (Math.abs(beats - 2.5) < 1e-6) return "hd"; // dotted half (5 eighths)
+    if (Math.abs(beats - 3) < 1e-6) return "hd"; // dotted half (6 eighths)
+    if (Math.abs(beats - 3.5) < 1e-6) return "hdd"; // double-dotted half (7 eighths)
     if (Math.abs(beats - 4) < 1e-6) return "w"; // whole
-    // default
+    // default - fallback to eighth note
+    console.warn(`[Notate] Unsupported duration: ${beats} beats, defaulting to eighth note`);
     return "8";
   }
 
