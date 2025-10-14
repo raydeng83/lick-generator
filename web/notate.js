@@ -139,47 +139,28 @@ window.Notate = (function () {
           // Subsequent occurrences: no accidental needed (carries through measure)
         }
 
-        // Calculate scale degree for display (for scale tones)
+        // Get scale degree for display (for scale tones)
+        // Use degree from JSON if available (for scale-step notes), otherwise calculate it
         let scaleDegree = null;
         if (n.harmonicFunction === 'scale-step' || n.ruleId === 'scale-step' ||
             n.ruleId === 'scale-run' || n.ruleId === 'melodic-cell' ||
-            n.ruleId === 'neighbor' || n.ruleId === 'enclosure-upper' || n.ruleId === 'enclosure-lower') {
+            n.ruleId === 'neighbor' || n.ruleId === 'enclosure' ||
+            n.ruleId === 'enclosure-upper' || n.ruleId === 'enclosure-lower') {
           // For neighbor and enclosure notes, check if they're actually scale tones (not chromatic)
           if (n.harmonicFunction === 'chromatic') {
             // Chromatic notes (lower neighbor) don't get scale degree
             scaleDegree = null;
-          } else {
-            // Calculate which scale degree this is
-            if (n.midi !== undefined && n.rootPc !== undefined && n.scaleName && window.Scales) {
-              const pc = (n.midi % 12 + 12) % 12;
-              const relPc = (pc - n.rootPc + 12) % 12;
-              const scalePcs = window.Scales.getScalePitchClasses(n.rootPc, n.scaleName);
-              const scaleIndex = scalePcs.indexOf(relPc);
-              if (scaleIndex !== -1) {
-                scaleDegree = String(scaleIndex + 1); // 1-indexed
-              } else {
-                // Debug: note is marked as scale-step but not in scale
-                console.log('[Notate] Scale degree not found:', {
-                  midi: n.midi,
-                  pc: pc,
-                  relPc: relPc,
-                  rootPc: n.rootPc,
-                  scaleName: n.scaleName,
-                  scalePcs: scalePcs,
-                  harmonicFunction: n.harmonicFunction,
-                  ruleId: n.ruleId
-                });
-              }
-            } else {
-              // Debug: missing required data
-              console.log('[Notate] Missing data for scale degree calculation:', {
-                midi: n.midi,
-                rootPc: n.rootPc,
-                scaleName: n.scaleName,
-                harmonicFunction: n.harmonicFunction,
-                ruleId: n.ruleId,
-                note: n
-              });
+          } else if (n.degree && n.harmonicFunction === 'scale-step') {
+            // Use pre-calculated degree from JSON (for scale-step notes)
+            scaleDegree = n.degree;
+          } else if (n.midi !== undefined && n.rootPc !== undefined && n.scaleName && window.Scales) {
+            // Calculate scale degree for notes that don't have it in JSON
+            const pc = (n.midi % 12 + 12) % 12;
+            const scalePcs = window.Scales.getScalePitchClasses(n.rootPc, n.scaleName);
+            // scalePcs contains absolute pitch classes, so search for absolute pc (not relative)
+            const scaleIndex = scalePcs.indexOf(pc);
+            if (scaleIndex !== -1) {
+              scaleDegree = String(scaleIndex + 1); // 1-indexed
             }
           }
         }
