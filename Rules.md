@@ -37,4 +37,4 @@ Melodic Structure is small cells of notes to create melody, four note groupings:
 4th is the avoid notes for major scale. Yet, an avoid note is not always forbidden but needs to be handled with care.
 
 #Rule 7
-I chord measure can ends early, in most cases.
+For ii-V-I, the I chord measure can ends early, in most cases.

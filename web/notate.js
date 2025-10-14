@@ -114,7 +114,10 @@ window.Notate = (function () {
         const sn = new VF.StaveNote({ keys: [key], duration: dur, auto_stem: true });
 
         // Color code notes by harmonic function
-        if (n.harmonicFunction === 'chord-tone' || n.ruleId === 'chord-tone') {
+        if (n.harmonicFunction === 'chord-tone' || n.ruleId === 'chord-tone' ||
+            n.ruleId === 'neighbor-target' || n.ruleId === 'neighbor-return' ||
+            n.ruleId === 'enclosure-target' || n.ruleId === 'arpeggio-chord-tone' ||
+            n.ruleId === 'scale-run-chord-tone') {
           // Chord tones: Blue
           sn.setStyle({ fillStyle: '#4cc3ff', strokeStyle: '#4cc3ff' });
 
@@ -126,11 +129,8 @@ window.Notate = (function () {
               .setVerticalJustification(VF.Annotation.VerticalJustify.BOTTOM);
             sn.addAnnotation(0, degreeAnn);
           }
-        } else if (n.harmonicFunction === 'chromatic-below' || n.ruleId === 'chromatic-below') {
-          // Chromatic approaches: Orange
-          sn.setStyle({ fillStyle: '#ff9500', strokeStyle: '#ff9500' });
-        } else if (n.harmonicFunction === 'scale-step' || n.ruleId === 'scale-step') {
-          // Scale tones: Green
+        } else {
+          // Scale tones and devices: Green
           sn.setStyle({ fillStyle: '#34c759', strokeStyle: '#34c759' });
         }
 

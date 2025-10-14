@@ -200,8 +200,6 @@ window.LickGen = (function () {
 
   function assignHarmonicFunctions(skeleton, progression, options = {}) {
     const {
-      approachRule = 'chromatic-below',
-      weakBeatRule = 'scale-step',
       scaleStrategy = 'default'
     } = options;
 
@@ -214,7 +212,6 @@ window.LickGen = (function () {
       const scaleName = Scales.selectScale(quality, scaleStrategy);
 
       const isStrongBeat = (slot.slot % 4 === 0); // beats 1, 3
-      const isApproach = (slot.slot % 4 === 3); // eighth before beats 2, 4
 
       let harmonicFunc = {
         chordSymbol: seg.symbol,
@@ -227,11 +224,9 @@ window.LickGen = (function () {
       if (isStrongBeat) {
         harmonicFunc.function = 'chord-tone';
         // Don't choose degree here - let Stage 3 pick randomly for variety
-      } else if (isApproach) {
-        harmonicFunc.function = approachRule;
-        harmonicFunc.resolvesToNext = true;
       } else {
-        harmonicFunc.function = weakBeatRule;
+        // Weak beats: scale steps (removed chromatic approach)
+        harmonicFunc.function = 'scale-step';
         harmonicFunc.direction = null;
       }
 
@@ -420,12 +415,144 @@ window.LickGen = (function () {
         break;
 
       case 'neighbor':
-      case 'enclosure':
-        // These devices apply locally - use Rules 1-4 with device influence
+        // Neighbor tone: target → neighbor → target pattern
+        // Apply pattern where appropriate, fill rest with chord tones/scale steps
         for (let i = 0; i < slots.length; i++) {
-          const realized = realizeSingleNote(slots[i], lastMidi, slots, i, range);
-          result.push(realized);
-          lastMidi = realized.midi;
+          const slot = slots[i];
+          const isStrongBeat = (slot.slot % 4 === 0);
+
+          // Check if we can fit a neighbor pattern (need 3 consecutive slots)
+          if (i + 2 < slots.length && isStrongBeat) {
+            // Target (chord tone)
+            const target = resolveChordTone(slot, lastMidi);
+            result.push({
+              ...slot,
+              midi: target.midi,
+              velocity: 0.9,
+              ruleId: 'neighbor-target',
+              harmonicFunction: 'chord-tone',
+              degree: target.degree,
+            });
+            lastMidi = target.midi;
+            i++;
+
+            // Neighbor (scale step above or below)
+            const neighborType = device.neighborType || 'upper';
+            const scalePcs = scalePitchClasses(slots[i].rootPc, slots[i].quality, slots[i].scaleName);
+            const neighborMidi = neighborType === 'upper'
+              ? scaleStep(lastMidi, slots[i].rootPc, scalePcs, 1)
+              : scaleStep(lastMidi, slots[i].rootPc, scalePcs, -1);
+
+            result.push({
+              ...slots[i],
+              midi: neighborMidi,
+              velocity: 0.9,
+              ruleId: 'neighbor',
+              harmonicFunction: 'scale-step',
+              degree: null,
+            });
+            lastMidi = neighborMidi;
+            i++;
+
+            // Return to target
+            result.push({
+              ...slots[i],
+              midi: target.midi,
+              velocity: 0.9,
+              ruleId: 'neighbor-return',
+              harmonicFunction: 'chord-tone',
+              degree: target.degree,
+            });
+            lastMidi = target.midi;
+          } else {
+            // No room for pattern - use standard realization
+            const realized = realizeSingleNote(slot, lastMidi, slots, i, range);
+            result.push(realized);
+            lastMidi = realized.midi;
+          }
+        }
+        break;
+
+      case 'enclosure':
+        // Enclosure: chromatic approach from both sides to target
+        // Pattern: upper → lower → target (or lower → upper → target)
+        for (let i = 0; i < slots.length; i++) {
+          const slot = slots[i];
+          const isStrongBeat = (slot.slot % 4 === 0);
+
+          // Check if we can fit enclosure pattern (need 3-4 consecutive slots)
+          if (i + 2 < slots.length && isStrongBeat) {
+            // Determine target (next strong beat chord tone)
+            const targetSlot = slots[i + 2] < slots.length ? slots[i + 2] : slot;
+            const target = resolveChordTone(targetSlot, lastMidi);
+
+            // Enclosure approach notes
+            const enclosureType = device.enclosureType || 'upper-lower';
+            if (enclosureType === 'upper-lower') {
+              // Upper chromatic
+              result.push({
+                ...slot,
+                midi: target.midi + 1,
+                velocity: 0.9,
+                ruleId: 'enclosure-upper',
+                harmonicFunction: 'scale-step',
+                degree: null,
+              });
+              lastMidi = target.midi + 1;
+              i++;
+
+              // Lower chromatic
+              result.push({
+                ...slots[i],
+                midi: target.midi - 1,
+                velocity: 0.9,
+                ruleId: 'enclosure-lower',
+                harmonicFunction: 'scale-step',
+                degree: null,
+              });
+              lastMidi = target.midi - 1;
+              i++;
+            } else {
+              // Lower-upper
+              result.push({
+                ...slot,
+                midi: target.midi - 1,
+                velocity: 0.9,
+                ruleId: 'enclosure-lower',
+                harmonicFunction: 'scale-step',
+                degree: null,
+              });
+              lastMidi = target.midi - 1;
+              i++;
+
+              result.push({
+                ...slots[i],
+                midi: target.midi + 1,
+                velocity: 0.9,
+                ruleId: 'enclosure-upper',
+                harmonicFunction: 'scale-step',
+                degree: null,
+              });
+              lastMidi = target.midi + 1;
+              i++;
+            }
+
+            // Target
+            result.push({
+              ...slots[i],
+              midi: target.midi,
+              velocity: 0.9,
+              ruleId: 'enclosure-target',
+              harmonicFunction: 'chord-tone',
+              degree: target.degree,
+            });
+            lastMidi = target.midi;
+          } else {
+            // No room for pattern - use standard realization
+            const realized = realizeSingleNote(slot, lastMidi, slots, i, range);
+            result.push(realized);
+            lastMidi = realized.midi;
+          }
         }
         break;
 
@@ -465,27 +592,15 @@ window.LickGen = (function () {
       const nextNote = functionalPhrase[idx + 1];
 
       if (midi === null) {
-        // Not a chord tone - need to resolve
-        switch (note.function) {
-          case 'chromatic-below':
-            const targetResult = nextNote ? resolveChordTone(nextNote, lastMidi) : { midi: lastMidi };
-            midi = targetResult.midi - 1;
-            break;
-
-          case 'scale-step':
-            // RULE 4: Navigate toward next chord tone using scale
-            if (note.nextChordToneIndex !== undefined && note.nextChordToneIndex !== -1) {
-              const targetChordTone = pitches[note.nextChordToneIndex];
-              const stepsToTarget = note.nextChordToneIndex - idx;
-              midi = navigateTowardTarget(lastMidi, targetChordTone.midi, note, stepsToTarget);
-            } else {
-              // No target - random scale step
-              midi = resolveScaleStep(note, lastMidi);
-            }
-            break;
-
-          default:
-            midi = lastMidi;
+        // Not a chord tone - use scale steps
+        // RULE 4: Navigate toward next chord tone using scale
+        if (note.nextChordToneIndex !== undefined && note.nextChordToneIndex !== -1) {
+          const targetChordTone = pitches[note.nextChordToneIndex];
+          const stepsToTarget = note.nextChordToneIndex - idx;
+          midi = navigateTowardTarget(lastMidi, targetChordTone.midi, note, stepsToTarget);
+        } else {
+          // No target - random scale step
+          midi = resolveScaleStep(note, lastMidi);
         }
       }
 
@@ -518,11 +633,8 @@ window.LickGen = (function () {
       const result = resolveChordTone(note, refMidi);
       midi = result.midi;
       degree = result.degree;
-    } else if (note.function === 'chromatic-below') {
-      const targetResult = nextNote ? resolveChordTone(nextNote, refMidi) : { midi: refMidi };
-      midi = targetResult.midi - 1;
-    } else if (note.function === 'scale-step') {
-      // Find next chord tone for navigation
+    } else {
+      // Use scale steps for all weak beats
       const nextChordToneIdx = findNextChordTone(phrase, idx);
       if (nextChordToneIdx !== -1) {
         const targetChordTone = phrase[nextChordToneIdx];
@@ -532,8 +644,6 @@ window.LickGen = (function () {
       } else {
         midi = resolveScaleStep(note, refMidi);
       }
-    } else {
-      midi = refMidi;
     }
 
     midi = constrainToRange(midi, refMidi, range);
@@ -554,18 +664,8 @@ window.LickGen = (function () {
   // ========== STRATEGY SELECTION ==========
 
   function selectGenerationStrategy(progression, metadata) {
-    // Branch based on tempo - fast tempos use simpler approach patterns
-    // Note: Strong beats always use chord tones (Rule 1)
-    if (metadata.tempo > 200) {
-      return {
-        approachRule: 'scale-step',
-        weakBeatRule: 'scale-step'
-      };
-    }
-
-    // Default bebop-style strategy
+    // All weak beats use scale steps (chromatic approach removed)
     return {
-      approachRule: 'chromatic-below',
       weakBeatRule: 'scale-step'
     };
   }
