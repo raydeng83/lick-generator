@@ -953,8 +953,25 @@ window.LickGen = (function () {
    * Upper neighbor is the next scale note from above (diatonic)
    */
   function getUpperNeighbor(targetMidi, rootPc, scalePcs) {
-    // Find next scale note above target
-    return scaleStep(targetMidi, rootPc, scalePcs, 1);
+    // Find the next scale note ABOVE the target
+    const targetPc = (targetMidi % 12 + 12) % 12;
+    const scaleAbs = scalePcs.map(pc => (rootPc + pc + 120) % 12);
+
+    // Build all scale note MIDI values in a reasonable range around target
+    const candidates = [];
+    for (let octave = -1; octave <= 1; octave++) {
+      for (const pc of scaleAbs) {
+        const midi = targetMidi + octave * 12 + ((pc - targetPc + 12) % 12);
+        if (midi > targetMidi && midi <= targetMidi + 12) {
+          // Only include notes strictly above target, within one octave
+          candidates.push(midi);
+        }
+      }
+    }
+
+    // Return the closest one above the target
+    candidates.sort((a, b) => a - b);
+    return candidates.length > 0 ? candidates[0] : targetMidi + 1; // Fallback to half-step if no scale note found
   }
 
   function constrainToRange(midi, lastMidi, [lo, hi]) {
