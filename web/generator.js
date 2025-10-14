@@ -317,15 +317,32 @@ window.LickGen = (function () {
   function postProcess(notes, options = {}) {
     const { swing = 0 } = options;
 
-    // Add note names to all notes that don't have them
+    // Add note names and scale degrees to all notes
     let processed = notes.map(note => {
-      if (!note.noteName && note.midi !== undefined) {
-        return {
-          ...note,
-          noteName: midiToNoteName(note.midi)
-        };
+      const updatedNote = { ...note };
+
+      // Add note name if missing
+      if (!updatedNote.noteName && updatedNote.midi !== undefined) {
+        updatedNote.noteName = midiToNoteName(updatedNote.midi);
       }
-      return note;
+
+      // Add scale degree for scale-step notes (if not already present)
+      if (!updatedNote.degree && updatedNote.midi !== undefined &&
+          updatedNote.rootPc !== undefined && updatedNote.scaleName) {
+
+        // Check if this is a scale-step note (not chord-tone, not chromatic)
+        if (updatedNote.harmonicFunction === 'scale-step' ||
+            updatedNote.ruleId === 'scale-step' ||
+            updatedNote.ruleId === 'scale-run' ||
+            updatedNote.ruleId === 'melodic-cell') {
+          const scaleDegree = getScaleDegree(updatedNote.midi, updatedNote.rootPc, updatedNote.scaleName);
+          if (scaleDegree) {
+            updatedNote.degree = scaleDegree;
+          }
+        }
+      }
+
+      return updatedNote;
     });
 
     if (swing === 0) {
@@ -462,6 +479,31 @@ window.LickGen = (function () {
     };
 
     return degreeMap[relPc] || '?';
+  }
+
+  /**
+   * Calculate scale degree (1-7) for a note in a scale
+   * @param {number} midi - MIDI note number
+   * @param {number} rootPc - Root pitch class (0-11)
+   * @param {string} scaleName - Scale name (e.g., 'dorian')
+   * @returns {string|null} Scale degree as string (1-7) or null if not in scale
+   */
+  function getScaleDegree(midi, rootPc, scaleName) {
+    if (!window.Scales) return null;
+
+    const scalePcs = window.Scales.getScalePitchClasses(rootPc, scaleName);
+    const pc = (midi % 12 + 12) % 12;
+    const relPc = (pc - rootPc + 12) % 12;
+
+    // Find this pitch class in the scale
+    const scaleIndex = scalePcs.indexOf(pc);
+    if (scaleIndex === -1) {
+      // Not in scale (chromatic note)
+      return null;
+    }
+
+    // Return 1-indexed scale degree
+    return String(scaleIndex + 1);
   }
 
   // ========== PUBLIC API ==========
