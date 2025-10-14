@@ -111,6 +111,57 @@ window.Notate = (function () {
       // Value: 'sharp', 'flat', 'natural', or null (not seen yet)
       const accidentalState = new Map();
 
+      // Detect enclosure patterns for labeling
+      // Map: note index -> enclosure type ('2-note' or '3-note')
+      // Pattern structure:
+      // - 2-note enclosure: target → fill → enclosure → enclosure → next target
+      // - 3-note enclosure: target → enclosure → enclosure → enclosure → next target
+      const enclosureLabels = new Map();
+      let skipUntilIdx = -1; // Track which notes are already part of a labeled enclosure
+
+      for (let idx = 0; idx < segNotes.length; idx++) {
+        // Skip if this note is already part of a previous enclosure
+        if (idx <= skipUntilIdx) continue;
+
+        const note = segNotes[idx];
+
+        // Look for enclosure-target as the start of a pattern
+        if (note.device === 'enclosure-target') {
+          // Check what follows the target
+          if (idx + 1 < segNotes.length) {
+            const nextNote = segNotes[idx + 1];
+
+            if (nextNote.device === 'enclosure-fill') {
+              // 2-note enclosure: target → fill → 2 enclosure notes
+              // Count the enclosure notes after the fill
+              let enclosureCount = 0;
+              for (let j = idx + 2; j < segNotes.length && segNotes[j].device === 'enclosure'; j++) {
+                enclosureCount++;
+              }
+
+              if (enclosureCount === 2) {
+                // Label at the fill note (first note of the visual pattern)
+                enclosureLabels.set(idx + 1, '2-note');
+                skipUntilIdx = idx + 3; // Skip fill + 2 enclosure notes
+              }
+            } else if (nextNote.device === 'enclosure') {
+              // 3-note enclosure: target → 3 enclosure notes (no fill)
+              let enclosureCount = 1; // Already found first enclosure
+              for (let j = idx + 2; j < segNotes.length && segNotes[j].device === 'enclosure'; j++) {
+                enclosureCount++;
+              }
+
+              if (enclosureCount === 3) {
+                // Label at the first enclosure note
+                enclosureLabels.set(idx + 1, '3-note');
+                skipUntilIdx = idx + 3; // Skip 3 enclosure notes
+              }
+            }
+          }
+        }
+      }
+
+      let noteIndex = 0; // Track index in segNotes for enclosure labeling
       for (const n of segNotes) {
         // Safety check: ensure note has required properties
         if (!n || typeof n.midi !== 'number' || typeof n.durationBeats !== 'number') {
@@ -251,6 +302,7 @@ window.Notate = (function () {
 
         notes.push(sn);
         cursorE8 += durE8;
+        noteIndex++; // Increment index for enclosure labeling
       }
 
       // Fill remaining slots with rests
@@ -291,6 +343,67 @@ window.Notate = (function () {
         console.log('[Notate] Drawing', beams.length, 'beams...');
         // Filter out any null/undefined beams before drawing
         beams.filter(b => b).forEach(b => b.setContext(ctx).draw());
+
+        // Draw enclosure labels spanning across note groups
+        enclosureLabels.forEach((enclosureType, startIdx) => {
+          // startIdx now points to either:
+          // - enclosure-fill (for 2-note enclosure)
+          // - first enclosure note (for 3-note enclosure)
+
+          // Calculate endIdx based on pattern type
+          let endIdx;
+          if (enclosureType === '2-note') {
+            // 2-note: fill + 2 enclosure notes = 3 total notes
+            endIdx = startIdx + 2;
+          } else {
+            // 3-note: 3 enclosure notes = 3 total notes
+            endIdx = startIdx + 2;
+          }
+
+          // Get the visual positions of the first and last notes in the pattern
+          // Map segNotes index to validNotes index (accounting for rests)
+          let firstNoteIdx = -1;
+          let lastNoteIdx = -1;
+          let segNoteCounter = 0;
+
+          for (let i = 0; i < validNotes.length; i++) {
+            const vfNote = validNotes[i];
+            // Skip rests
+            if (vfNote.duration.includes('r')) continue;
+
+            if (segNoteCounter === startIdx) firstNoteIdx = i;
+            if (segNoteCounter === endIdx) lastNoteIdx = i;
+
+            segNoteCounter++;
+          }
+
+          if (firstNoteIdx !== -1 && lastNoteIdx !== -1) {
+            try {
+              const firstNote = validNotes[firstNoteIdx];
+              const lastNote = validNotes[lastNoteIdx];
+
+              // Get note positions
+              const firstX = firstNote.getAbsoluteX();
+              const lastX = lastNote.getAbsoluteX();
+              const centerX = (firstX + lastX) / 2;
+
+              // Position below the staff and below degree annotations
+              // Staff is at y, staff lines span ~80px, degree annotations are ~15px below staff
+              const textY = y + 135; // Much lower to avoid overlap with degree numbers
+
+              // Draw the label
+              const labelText = enclosureType === '2-note' ? '2-note enclosure' : '3-note enclosure';
+              ctx.save();
+              ctx.setFont('Arial', 9, 'italic');
+              ctx.fillStyle = '#000000'; // Black color
+              ctx.textAlign = 'center';
+              ctx.fillText(labelText, centerX, textY);
+              ctx.restore();
+            } catch (error) {
+              console.error('[Notate] Error drawing enclosure label:', error);
+            }
+          }
+        });
 
         console.log('[Notate] Measure rendered successfully');
 
