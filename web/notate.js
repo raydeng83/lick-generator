@@ -143,7 +143,9 @@ window.Notate = (function () {
         let scaleDegree = null;
         if (n.harmonicFunction === 'scale-step' || n.ruleId === 'scale-step' ||
             n.ruleId === 'scale-run' || n.ruleId === 'melodic-cell' ||
-            n.ruleId === 'neighbor' || n.ruleId === 'enclosure-upper' || n.ruleId === 'enclosure-lower') {
+            n.ruleId === 'neighbor' || n.ruleId === 'enclosure' ||
+            n.ruleId === 'enclosure-upper' || n.ruleId === 'enclosure-lower' ||
+            n.ruleId === 'enclosure-fill') {
           // For neighbor and enclosure notes, check if they're actually scale tones (not chromatic)
           if (n.harmonicFunction === 'chromatic') {
             // Chromatic notes (lower neighbor) don't get scale degree
@@ -200,7 +202,9 @@ window.Notate = (function () {
           }
         } else if (n.harmonicFunction === 'scale-step' || n.ruleId === 'scale-step' ||
                    n.ruleId === 'scale-run' || n.ruleId === 'melodic-cell' ||
+                   n.ruleId === 'enclosure-fill' ||
                    (n.ruleId === 'neighbor' && n.harmonicFunction === 'scale-step') ||
+                   (n.ruleId === 'enclosure' && n.harmonicFunction === 'scale-step') ||
                    (n.ruleId === 'enclosure-upper' && n.harmonicFunction === 'scale-step') ||
                    (n.ruleId === 'enclosure-lower' && n.harmonicFunction === 'scale-step')) {
           // Scale tones: Green (notes in the scale)
