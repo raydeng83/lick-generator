@@ -104,12 +104,13 @@ window.LickGen = (function () {
 
   /**
    * Convert MIDI number to note name with proper enharmonic spelling
-   * Uses sharps or flats based on the key signature
+   * Uses sharps or flats based on the key signature and scale context
    * @param {number} midi - MIDI note number
    * @param {number} rootPc - Root pitch class (0-11), optional
+   * @param {string} scaleName - Scale name for context, optional
    * @returns {string} Note name with octave (e.g., "C4", "Bb3", "F#5")
    */
-  function midiToNoteName(midi, rootPc = null) {
+  function midiToNoteName(midi, rootPc = null, scaleName = null) {
     const octave = Math.floor(midi / 12) - 1;
     const pc = midi % 12;
 
@@ -117,6 +118,33 @@ window.LickGen = (function () {
     if (rootPc === null) {
       const sharpNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
       return `${sharpNames[pc]}${octave}`;
+    }
+
+    // Check if this note is in the scale - if so, use scale-based spelling
+    if (scaleName && window.Scales) {
+      const scalePcs = window.Scales.getScalePitchClasses(rootPc, scaleName);
+      if (scalePcs.includes(pc)) {
+        // Note is in the scale - check what scale degree it is
+        const relPc = (pc - rootPc + 12) % 12;
+
+        // Common scale degrees that should use flats:
+        // b3 (minor 3rd), b7 (minor 7th), b6 (minor 6th), b2 (flat 9)
+        const flatDegrees = [3, 10, 8, 1]; // b3, b7, b6, b2
+
+        if (flatDegrees.includes(relPc)) {
+          const flatNames = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+          return `${flatNames[pc]}${octave}`;
+        }
+      } else {
+        // Note is NOT in the scale (chromatic approach note)
+        // Check if there's a scale note a half-step above - if so, use flat
+        const nextPc = (pc + 1) % 12;
+        if (scalePcs.includes(nextPc)) {
+          // This is a chromatic lower neighbor - use flat naming
+          const flatNames = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+          return `${flatNames[pc]}${octave}`;
+        }
+      }
     }
 
     // Determine if key uses sharps or flats based on root
@@ -191,7 +219,7 @@ window.LickGen = (function () {
         ...measure,
         targetNote: {
           midi: targetMidi,
-          noteName: midiToNoteName(targetMidi, measure.rootPc),
+          noteName: midiToNoteName(targetMidi, measure.rootPc, measure.scale),
           degree,
           startBeat: measure.measureStart,
           durationBeats: 0.5,
@@ -323,7 +351,7 @@ window.LickGen = (function () {
         startBeat: measureStart + i * 0.5,
         durationBeats: 0.5,
         midi: currentMidi,
-        noteName: midiToNoteName(currentMidi, rootPc),
+        noteName: midiToNoteName(currentMidi, rootPc, scale),
         velocity: 0.9,
         ruleId: 'scale-step',
         harmonicFunction: 'scale-step',
@@ -349,7 +377,7 @@ window.LickGen = (function () {
 
       // Add note name if missing
       if (!updatedNote.noteName && updatedNote.midi !== undefined) {
-        updatedNote.noteName = midiToNoteName(updatedNote.midi, updatedNote.rootPc);
+        updatedNote.noteName = midiToNoteName(updatedNote.midi, updatedNote.rootPc, updatedNote.scaleName);
       }
 
       // Add degree for notes that don't have it (if not already present)
