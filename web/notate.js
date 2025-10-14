@@ -116,7 +116,7 @@ window.Notate = (function () {
       // Value: 'sharp', 'flat', 'natural', or null (not seen yet)
       const accidentalState = new Map();
 
-      // Detect enclosure patterns for labeling
+      // Detect enclosure patterns for labeling (only on non-rest notes)
       // Map: note index -> enclosure type ('2-note' or '3-note')
       // Pattern structure:
       // - 2-note enclosure: target → fill → enclosure → enclosure → next target
@@ -124,23 +124,26 @@ window.Notate = (function () {
       const enclosureLabels = new Map();
       let skipUntilIdx = -1; // Track which notes are already part of a labeled enclosure
 
-      for (let idx = 0; idx < segNotes.length; idx++) {
+      // Filter out rest notes for enclosure detection
+      const nonRestNotes = segNotes.filter(n => !n.isRest);
+
+      for (let idx = 0; idx < nonRestNotes.length; idx++) {
         // Skip if this note is already part of a previous enclosure
         if (idx <= skipUntilIdx) continue;
 
-        const note = segNotes[idx];
+        const note = nonRestNotes[idx];
 
         // Look for enclosure-target as the start of a pattern
         if (note.device === 'enclosure-target') {
           // Check what follows the target
-          if (idx + 1 < segNotes.length) {
-            const nextNote = segNotes[idx + 1];
+          if (idx + 1 < nonRestNotes.length) {
+            const nextNote = nonRestNotes[idx + 1];
 
             if (nextNote.device === 'enclosure-fill') {
               // 2-note enclosure: target → fill → 2 enclosure notes
               // Count the enclosure notes after the fill
               let enclosureCount = 0;
-              for (let j = idx + 2; j < segNotes.length && segNotes[j].device === 'enclosure'; j++) {
+              for (let j = idx + 2; j < nonRestNotes.length && nonRestNotes[j].device === 'enclosure'; j++) {
                 enclosureCount++;
               }
 
@@ -152,7 +155,7 @@ window.Notate = (function () {
             } else if (nextNote.device === 'enclosure') {
               // 3-note enclosure: target → 3 enclosure notes (no fill)
               let enclosureCount = 1; // Already found first enclosure
-              for (let j = idx + 2; j < segNotes.length && segNotes[j].device === 'enclosure'; j++) {
+              for (let j = idx + 2; j < nonRestNotes.length && nonRestNotes[j].device === 'enclosure'; j++) {
                 enclosureCount++;
               }
 
