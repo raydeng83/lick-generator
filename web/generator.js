@@ -326,15 +326,28 @@ window.LickGen = (function () {
         updatedNote.noteName = midiToNoteName(updatedNote.midi);
       }
 
-      // Add scale degree for scale-step notes (if not already present)
+      // Add degree for notes that don't have it (if not already present)
       if (!updatedNote.degree && updatedNote.midi !== undefined &&
-          updatedNote.rootPc !== undefined && updatedNote.scaleName) {
+          updatedNote.rootPc !== undefined) {
 
-        // Check if this is a scale-step note (not chord-tone, not chromatic)
-        if (updatedNote.harmonicFunction === 'scale-step' ||
-            updatedNote.ruleId === 'scale-step' ||
-            updatedNote.ruleId === 'scale-run' ||
-            updatedNote.ruleId === 'melodic-cell') {
+        // Chord tones: add chord degree (1, 3, 5, b7, etc.)
+        if (updatedNote.harmonicFunction === 'chord-tone' ||
+            updatedNote.ruleId === 'chord-tone' ||
+            updatedNote.ruleId === 'arpeggio' ||
+            updatedNote.ruleId === 'scale-run-chord-tone' ||
+            updatedNote.ruleId === 'melodic-cell-chord-tone') {
+          const chordPcs = chordPitchClasses(updatedNote.rootPc, updatedNote.quality);
+          const chordDegree = getChordDegree(updatedNote.midi, updatedNote.rootPc, chordPcs);
+          if (chordDegree) {
+            updatedNote.degree = chordDegree;
+          }
+        }
+        // Scale-step notes: add scale degree (1-7)
+        else if (updatedNote.scaleName &&
+                 (updatedNote.harmonicFunction === 'scale-step' ||
+                  updatedNote.ruleId === 'scale-step' ||
+                  updatedNote.ruleId === 'scale-run' ||
+                  updatedNote.ruleId === 'melodic-cell')) {
           const scaleDegree = getScaleDegree(updatedNote.midi, updatedNote.rootPc, updatedNote.scaleName);
           if (scaleDegree) {
             updatedNote.degree = scaleDegree;

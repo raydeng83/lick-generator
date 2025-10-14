@@ -295,6 +295,10 @@ window.DevicesNew = (function () {
       const upperNeighbor = getUpperNeighbor(targetMidi, nextTarget.rootPc || rootPc, nextScalePcs);
       const enclosureType = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
 
+      // Check if neighbors are chord tones
+      const upperIsChordTone = isChordTone(upperNeighbor, rootPc, chordPcs);
+      const lowerIsChordTone = isChordTone(lowerNeighbor, rootPc, chordPcs);
+
       notes.push({
         startBeat: measureStart + 3,
         durationBeats: 0.5,
@@ -307,7 +311,9 @@ window.DevicesNew = (function () {
         quality,
         scaleName: scale,
         ruleId: 'enclosure',
-        harmonicFunction: enclosureType === 'upper-lower' ? 'scale-step' : 'chromatic',
+        harmonicFunction: enclosureType === 'upper-lower'
+          ? (upperIsChordTone ? 'chord-tone' : 'scale-step')
+          : (lowerIsChordTone ? 'chord-tone' : 'chromatic'),
       });
 
       notes.push({
@@ -322,7 +328,9 @@ window.DevicesNew = (function () {
         quality,
         scaleName: scale,
         ruleId: 'enclosure',
-        harmonicFunction: enclosureType === 'upper-lower' ? 'chromatic' : 'scale-step',
+        harmonicFunction: enclosureType === 'upper-lower'
+          ? (lowerIsChordTone ? 'chord-tone' : 'chromatic')
+          : (upperIsChordTone ? 'chord-tone' : 'scale-step'),
       });
     } else {
       // Proximity ending: fill remaining with scale steps, ensuring last note is close to target
@@ -416,6 +424,10 @@ window.DevicesNew = (function () {
     const upperNeighbor1 = getUpperNeighbor(middleTargetMidi, rootPc, scalePcs);
     const enclosureType1 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
 
+    // Check if neighbors are chord tones
+    const upperIsChordTone1 = isChordTone(upperNeighbor1, rootPc, chordPcs);
+    const lowerIsChordTone1 = isChordTone(lowerNeighbor1, rootPc, chordPcs);
+
     notes.push({
       startBeat: measureStart + 1.5,
       durationBeats: 0.5,
@@ -428,7 +440,9 @@ window.DevicesNew = (function () {
       quality,
       scaleName: scale,
       ruleId: 'enclosure',
-      harmonicFunction: enclosureType1 === 'upper-lower' ? 'scale-step' : 'chromatic',
+      harmonicFunction: enclosureType1 === 'upper-lower'
+        ? (upperIsChordTone1 ? 'chord-tone' : 'scale-step')
+        : (lowerIsChordTone1 ? 'chord-tone' : 'chromatic'),
     });
 
     notes.push({
@@ -443,7 +457,9 @@ window.DevicesNew = (function () {
       quality,
       scaleName: scale,
       ruleId: 'enclosure',
-      harmonicFunction: enclosureType1 === 'upper-lower' ? 'chromatic' : 'scale-step',
+      harmonicFunction: enclosureType1 === 'upper-lower'
+        ? (lowerIsChordTone1 ? 'chord-tone' : 'chromatic')
+        : (upperIsChordTone1 ? 'chord-tone' : 'scale-step'),
     });
 
     // Slot 5: Middle target
@@ -469,6 +485,10 @@ window.DevicesNew = (function () {
     const upperNeighbor2 = getUpperNeighbor(nextTargetMidi, nextTarget.rootPc || rootPc, nextScalePcs);
     const enclosureType2 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
 
+    // Check if neighbors are chord tones
+    const upperIsChordTone2 = isChordTone(upperNeighbor2, rootPc, chordPcs);
+    const lowerIsChordTone2 = isChordTone(lowerNeighbor2, rootPc, chordPcs);
+
     notes.push({
       startBeat: measureStart + 3,
       durationBeats: 0.5,
@@ -481,7 +501,9 @@ window.DevicesNew = (function () {
       quality,
       scaleName: scale,
       ruleId: 'enclosure',
-      harmonicFunction: enclosureType2 === 'upper-lower' ? 'scale-step' : 'chromatic',
+      harmonicFunction: enclosureType2 === 'upper-lower'
+        ? (upperIsChordTone2 ? 'chord-tone' : 'scale-step')
+        : (lowerIsChordTone2 ? 'chord-tone' : 'chromatic'),
     });
 
     notes.push({
@@ -496,7 +518,9 @@ window.DevicesNew = (function () {
       quality,
       scaleName: scale,
       ruleId: 'enclosure',
-      harmonicFunction: enclosureType2 === 'upper-lower' ? 'chromatic' : 'scale-step',
+      harmonicFunction: enclosureType2 === 'upper-lower'
+        ? (lowerIsChordTone2 ? 'chord-tone' : 'chromatic')
+        : (upperIsChordTone2 ? 'chord-tone' : 'scale-step'),
     });
 
     return notes;
