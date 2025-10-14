@@ -95,10 +95,10 @@ window.AudioEngine = (function () {
     if (Math.abs(beats - 2) < 1e-6) return "2n";
     if (Math.abs(beats - 4) < 1e-6) return "1n";
 
-    // For non-standard durations (swing), convert to seconds
+    // For non-standard durations (swing), convert to seconds with unit suffix
     // Duration in seconds = (beats / tempo) * 60
     const seconds = (beats / tempo) * 60;
-    return seconds.toFixed(4); // Return as string "0.2500" etc
+    return seconds.toFixed(4) + "s"; // Return as string "0.2500s" with unit
   }
 
   function scheduleLick(lick, tempo) {
