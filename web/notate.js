@@ -217,9 +217,9 @@ window.Notate = (function () {
             sn.addAnnotation(0, degreeAnn);
           }
         } else {
-          // Chromatic/device notes (outside scale): Black
+          // Chromatic/device notes (outside scale): Orange
           // This includes chromatic approach notes like lower neighbor
-          sn.setStyle({ fillStyle: '#000000', strokeStyle: '#000000' });
+          sn.setStyle({ fillStyle: '#ff9500', strokeStyle: '#ff9500' });
         }
 
         notes.push(sn);
