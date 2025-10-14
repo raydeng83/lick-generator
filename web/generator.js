@@ -676,6 +676,8 @@ window.LickGen = (function () {
         degree,
         scaleName: note.scaleName, // Pass scale name for display
         chordSymbol: note.chordSymbol, // Pass chord symbol
+        rootPc: note.rootPc, // Required for scale degree calculation
+        quality: note.quality, // Required for scale selection
       };
     });
   }
@@ -717,6 +719,8 @@ window.LickGen = (function () {
       degree,
       scaleName: note.scaleName,
       chordSymbol: note.chordSymbol,
+      rootPc: note.rootPc, // Required for scale degree calculation
+      quality: note.quality, // Required for scale selection
     };
   }
 
