@@ -259,11 +259,63 @@ window.DevicesNew = (function () {
   // ========== MULTI-DEVICE MEASURE GENERATION ==========
 
   /**
+   * Generate enclosure approaching next target (always uses 2 slots)
+   */
+  function generateEnclosureToTarget(context, startSlot) {
+    const { chord, rootPc, quality, scale, targetNote, nextTarget } = context;
+    const measureStart = targetNote.startBeat;
+    const notes = [];
+
+    if (!window.Scales || !nextTarget) {
+      return { notes, slotsUsed: 0 };
+    }
+
+    const targetMidi = nextTarget.midi;
+    const nextScalePcs = window.Scales.getScalePitchClasses(nextTarget.rootPc || rootPc, scale);
+
+    const lowerNeighbor = targetMidi - 1; // chromatic (half-step below)
+    const upperNeighbor = getUpperNeighbor(targetMidi, nextTarget.rootPc || rootPc, nextScalePcs); // diatonic (scale step above)
+    const enclosureType = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+
+    notes.push({
+      startBeat: measureStart + startSlot * 0.5,
+      durationBeats: 0.5,
+      midi: enclosureType === 'upper-lower' ? upperNeighbor : lowerNeighbor,
+      velocity: 0.9,
+      device: 'enclosure',
+      enclosureType: enclosureType === 'upper-lower' ? 'upper' : 'lower',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+      ruleId: 'enclosure',
+      harmonicFunction: enclosureType === 'upper-lower' ? 'scale-step' : 'chromatic',
+    });
+
+    notes.push({
+      startBeat: measureStart + (startSlot + 1) * 0.5,
+      durationBeats: 0.5,
+      midi: enclosureType === 'upper-lower' ? lowerNeighbor : upperNeighbor,
+      velocity: 0.9,
+      device: 'enclosure',
+      enclosureType: enclosureType === 'upper-lower' ? 'lower' : 'upper',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+      ruleId: 'enclosure',
+      harmonicFunction: enclosureType === 'upper-lower' ? 'chromatic' : 'scale-step',
+    });
+
+    return { notes, slotsUsed: 2 };
+  }
+
+  /**
    * Fill a measure with multiple devices recursively
    */
   function fillMeasureWithDevices(context, strategy = 'varied') {
     const allNotes = [];
-    const { targetNote, isLastMeasure } = context;
+    const { targetNote, isLastMeasure, nextTarget } = context;
 
     // Slot 0 is always the target chord tone
     allNotes.push({
@@ -275,12 +327,16 @@ window.DevicesNew = (function () {
       scaleName: context.scale,
     });
 
-    // Fill remaining 7 slots with devices
-    let currentSlot = 1;
+    // Determine if we should reserve last 2 slots for enclosure
+    const useEnclosure = !isLastMeasure && nextTarget && Math.random() < 0.3; // 30% chance
     const maxSlots = isLastMeasure ? 6 : 8; // Last measure can end early
+    const fillUntilSlot = useEnclosure ? 6 : maxSlots; // Reserve slots 6-7 for enclosure if selected
 
-    while (currentSlot < maxSlots) {
-      const remainingSlots = maxSlots - currentSlot;
+    // Fill slots 1 through 5 (or 1 through 7) with random devices
+    let currentSlot = 1;
+
+    while (currentSlot < fillUntilSlot) {
+      const remainingSlots = fillUntilSlot - currentSlot;
 
       // Update context with current position
       const updatedContext = {
@@ -298,6 +354,18 @@ window.DevicesNew = (function () {
       }
 
       currentSlot += result.slotsUsed;
+    }
+
+    // Add enclosure at end if selected
+    if (useEnclosure) {
+      const updatedContext = {
+        ...context,
+        lastMidi: allNotes[allNotes.length - 1].midi,
+      };
+      const result = generateEnclosureToTarget(updatedContext, 6);
+      for (const note of result.notes) {
+        allNotes.push(note);
+      }
     }
 
     return allNotes;
