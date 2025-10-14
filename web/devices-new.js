@@ -395,9 +395,9 @@ window.DevicesNew = (function () {
 
   /**
    * Last Measure Enclosure Device
-   * For the I chord (resolution), creates enclosure targeting beat 5 (next measure downbeat)
-   * Structure: Target → Fill(3) → Enclosure(2) → Target on beat 5, then END
-   * The lick ends on the target chord tone at beat 5
+   * For the I chord (resolution), creates enclosure targeting beat 3 downbeat
+   * Structure: Target → Fill(1) → Enclosure(2) → Target and END
+   * The lick ends on the target chord tone at beat 10.0 (beat 3 downbeat)
    */
   function generateLastMeasureEnclosure(context) {
     const { chord, rootPc, quality, scale, targetNote } = context;
@@ -408,7 +408,7 @@ window.DevicesNew = (function () {
     const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
     const notes = [];
 
-    // Slot 0: First target note (chord tone) at beat 0
+    // Slot 0 (beat 8.0): First target note (chord tone)
     notes.push({
       ...targetNote,
       device: 'enclosure-target',
@@ -418,37 +418,34 @@ window.DevicesNew = (function () {
       scaleName: scale,
     });
 
-    // Slots 1-3: Fill with scale steps
-    let currentMidi = targetNote.midi;
-    for (let i = 1; i <= 3; i++) {
-      currentMidi = avoidConsecutiveDuplicate(
-        currentMidi,
-        () => nextScaleNote(currentMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1)
-      );
+    // Slot 1 (beat 8.5): Fill note with scale step
+    let currentMidi = avoidConsecutiveDuplicate(
+      targetNote.midi,
+      () => nextScaleNote(targetNote.midi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1)
+    );
 
-      const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
+    const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
 
-      notes.push({
-        startBeat: measureStart + i * 0.5,
-        durationBeats: 0.5,
-        midi: currentMidi,
-        velocity: 0.9,
-        device: 'enclosure-fill',
-        chordSymbol: chord.symbol,
-        rootPc,
-        quality,
-        scaleName: scale,
-        ruleId: isChordToneNote ? 'chord-tone' : 'scale-step',
-        harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
-      });
-    }
+    notes.push({
+      startBeat: measureStart + 0.5,
+      durationBeats: 0.5,
+      midi: currentMidi,
+      velocity: 0.9,
+      device: 'enclosure-fill',
+      chordSymbol: chord.symbol,
+      rootPc,
+      quality,
+      scaleName: scale,
+      ruleId: isChordToneNote ? 'chord-tone' : 'scale-step',
+      harmonicFunction: isChordToneNote ? 'chord-tone' : 'scale-step',
+    });
 
-    // Beat 5 target: Select a chord tone for the resolution (different from beat 0)
-    const beat5TargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi]);
+    // Final target at beat 10.0: Select a chord tone for the resolution (different from beat 0)
+    const finalTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi]);
 
-    // Slots 4-5: Enclosure approaching beat 5 target
-    const lowerNeighbor = beat5TargetMidi - 1;
-    const upperNeighbor = getUpperNeighbor(beat5TargetMidi, rootPc, scalePcs);
+    // Slots 2-3 (beats 9.0-9.5): Enclosure approaching final target
+    const lowerNeighbor = finalTargetMidi - 1;
+    const upperNeighbor = getUpperNeighbor(finalTargetMidi, rootPc, scalePcs);
 
     // Choose enclosure type, but swap if first note would duplicate the fill note
     let enclosureType = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
@@ -462,9 +459,9 @@ window.DevicesNew = (function () {
     const upperIsChordTone = isChordTone(upperNeighbor, rootPc, chordPcs);
     const lowerIsChordTone = isChordTone(lowerNeighbor, rootPc, chordPcs);
 
-    // Slot 4: First enclosure note
+    // Slot 2 (beat 9.0): First enclosure note
     notes.push({
-      startBeat: measureStart + 2.0,
+      startBeat: measureStart + 1.0,
       durationBeats: 0.5,
       midi: enclosureType === 'upper-lower' ? upperNeighbor : lowerNeighbor,
       velocity: 0.9,
@@ -480,9 +477,9 @@ window.DevicesNew = (function () {
         : (lowerIsChordTone ? 'chord-tone' : 'chromatic'),
     });
 
-    // Slot 5: Second enclosure note
+    // Slot 3 (beat 9.5): Second enclosure note
     notes.push({
-      startBeat: measureStart + 2.5,
+      startBeat: measureStart + 1.5,
       durationBeats: 0.5,
       midi: enclosureType === 'upper-lower' ? lowerNeighbor : upperNeighbor,
       velocity: 0.9,
@@ -498,11 +495,11 @@ window.DevicesNew = (function () {
         : (upperIsChordTone ? 'chord-tone' : 'scale-step'),
     });
 
-    // Slot 6: Beat 5 target - END OF LICK (chord tone resolution)
+    // Slot 4 (beat 10.0): Final target - END OF LICK (chord tone resolution)
     notes.push({
-      startBeat: measureStart + 3.0,
-      durationBeats: 1.0, // Longer duration for final note
-      midi: beat5TargetMidi,
+      startBeat: measureStart + 2.0,
+      durationBeats: 2.0, // Longer duration for final note (holds through beat 3 and 4)
+      midi: finalTargetMidi,
       velocity: 0.9,
       device: 'enclosure-target',
       chordSymbol: chord.symbol,
