@@ -416,9 +416,9 @@ window.DevicesNew = (function () {
     });
 
     // Slot 4: Middle target note (chord tone) - the 5th note of the measure
-    // Select a chord tone for the middle target
+    // Select a chord tone for the middle target, different from the first target (slot 0)
     const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
-    const middleTargetMidi = selectChordTone(currentMidi, chordAbs);
+    const middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi]);
 
     // Slots 2-3: First enclosure approaching middle target (slot 4)
     const lowerNeighbor1 = middleTargetMidi - 1;
@@ -478,10 +478,10 @@ window.DevicesNew = (function () {
     let finalMiddleTargetMidi = middleTargetMidi;
 
     if (finalMiddleTargetMidi === slot3Midi) {
-      // Try to find a different chord tone
+      // Try to find a different chord tone (exclude both slot 3 and slot 0)
       finalMiddleTargetMidi = avoidConsecutiveDuplicate(
         slot3Midi,
-        () => selectChordTone(currentMidi, chordAbs)
+        () => selectChordTone(currentMidi, chordAbs, [targetNote.midi, slot3Midi])
       );
     }
 
@@ -581,8 +581,11 @@ window.DevicesNew = (function () {
 
   /**
    * Select a chord tone near the current pitch
+   * @param {number} currentMidi - Current MIDI note
+   * @param {number[]} chordAbs - Absolute chord pitch classes
+   * @param {number[]} excludeMidi - Optional array of MIDI notes to avoid
    */
-  function selectChordTone(currentMidi, chordAbs) {
+  function selectChordTone(currentMidi, chordAbs, excludeMidi = []) {
     const candidates = [];
 
     // Find chord tones in nearby octaves
@@ -598,13 +601,14 @@ window.DevicesNew = (function () {
     // Sort by distance from current note
     candidates.sort((a, b) => Math.abs(a - currentMidi) - Math.abs(b - currentMidi));
 
-    // Return a nearby chord tone (prefer not the exact same note)
+    // Return a nearby chord tone (prefer not the exact same note or excluded notes)
     for (const midi of candidates) {
-      if (midi !== currentMidi) {
+      if (midi !== currentMidi && !excludeMidi.includes(midi)) {
         return midi;
       }
     }
 
+    // If all nearby candidates are excluded, return the first candidate (fallback)
     return candidates[0] || currentMidi;
   }
 
