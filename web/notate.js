@@ -38,7 +38,7 @@ window.Notate = (function () {
     return "8";
   }
 
-  function render({ container, progression, lick, metadata }) {
+  function render({ container, progression, lick, metadata, useColors = true }) {
     const el = typeof container === "string" ? document.querySelector(container) : container;
     if (!el) return;
     el.innerHTML = "";
@@ -189,8 +189,9 @@ window.Notate = (function () {
         // Color code notes by harmonic function
         if (n.harmonicFunction === 'chord-tone' || n.ruleId === 'chord-tone' ||
             n.ruleId === 'arpeggio-chord-tone' || n.ruleId === 'scale-run-chord-tone') {
-          // Chord tones: Blue
-          sn.setStyle({ fillStyle: '#4cc3ff', strokeStyle: '#4cc3ff' });
+          // Chord tones: Blue (or black if colors disabled)
+          const color = useColors ? '#4cc3ff' : '#000000';
+          sn.setStyle({ fillStyle: color, strokeStyle: color });
 
           // Add degree annotation below the note
           if (n.degree) {
@@ -205,8 +206,9 @@ window.Notate = (function () {
                    (n.ruleId === 'neighbor' && n.harmonicFunction === 'scale-step') ||
                    (n.ruleId === 'enclosure-upper' && n.harmonicFunction === 'scale-step') ||
                    (n.ruleId === 'enclosure-lower' && n.harmonicFunction === 'scale-step')) {
-          // Scale tones: Green (notes in the scale)
-          sn.setStyle({ fillStyle: '#34c759', strokeStyle: '#34c759' });
+          // Scale tones: Green (or black if colors disabled)
+          const color = useColors ? '#34c759' : '#000000';
+          sn.setStyle({ fillStyle: color, strokeStyle: color });
 
           // Add scale degree annotation below the note
           if (scaleDegree) {
@@ -217,9 +219,9 @@ window.Notate = (function () {
             sn.addAnnotation(0, degreeAnn);
           }
         } else {
-          // Chromatic/device notes (outside scale): Orange
-          // This includes chromatic approach notes like lower neighbor
-          sn.setStyle({ fillStyle: '#ff9500', strokeStyle: '#ff9500' });
+          // Chromatic/device notes (outside scale): Orange (or black if colors disabled)
+          const color = useColors ? '#ff9500' : '#000000';
+          sn.setStyle({ fillStyle: color, strokeStyle: color });
         }
 
         notes.push(sn);

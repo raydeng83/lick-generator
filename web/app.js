@@ -14,6 +14,7 @@
     swingValue: $("#swingValue"),
     metronome: $("#metronome"),
     chords: $("#chords"),
+    coloredNotes: $("#coloredNotes"),
     generate: $("#generate"),
     play: $("#play"),
     stop: $("#stop"),
@@ -41,6 +42,13 @@
 
   ui.swing.addEventListener("input", updateSwingDisplay);
   updateSwingDisplay();
+
+  // Re-render notation when color toggle changes
+  ui.coloredNotes.addEventListener("change", () => {
+    if (lastModel) {
+      renderAll(lastModel);
+    }
+  });
 
   let lastModel = null;
 
@@ -111,7 +119,13 @@
   }
 
   function renderAll(model) {
-    Notate.render({ container: ui.notation, progression: model.progression, lick: model.lick, metadata: model.metadata });
+    Notate.render({
+      container: ui.notation,
+      progression: model.progression,
+      lick: model.lick,
+      metadata: model.metadata,
+      useColors: ui.coloredNotes.checked
+    });
     ui.state.textContent = Schema.toState(model);
   }
 
