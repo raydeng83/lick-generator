@@ -556,16 +556,16 @@ window.LickGen = (function () {
             const lowerNeighbor = getLowerNeighbor(target.midi);
 
             // Debug logging
-            if (i >= slots.length - 2) {
-              console.log('[Enclosure Debug]');
-              console.log('  Current slot i:', i, 'chord:', slot.chordSymbol);
-              console.log('  Target slot chord:', targetSlot.chordSymbol, 'at beat:', targetSlot.startBeat);
-              console.log('  Target MIDI:', target.midi, 'degree:', target.degree);
-              console.log('  Upper neighbor:', upperNeighbor);
-              console.log('  Lower neighbor:', lowerNeighbor);
-              console.log('  Enclosure type:', enclosureType);
-              console.log('  Is first approach:', isFirstApproach);
-            }
+            console.log('[Enclosure Debug] Slot', i);
+            console.log('  Current slot:', i, 'chord:', slot.chordSymbol, 'beat:', slot.startBeat);
+            console.log('  Target slot chord:', targetSlot.chordSymbol, 'at beat:', targetSlot.startBeat);
+            console.log('  Last MIDI before resolving target:', lastMidi);
+            console.log('  Target MIDI:', target.midi, 'degree:', target.degree);
+            console.log('  Target rootPc:', targetSlot.rootPc, 'scaleName:', targetSlot.scaleName);
+            console.log('  Upper neighbor:', upperNeighbor);
+            console.log('  Lower neighbor:', lowerNeighbor);
+            console.log('  Enclosure type:', enclosureType);
+            console.log('  Is first approach:', isFirstApproach);
 
             let neighborMidi;
             let ruleId;
