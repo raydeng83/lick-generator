@@ -55,7 +55,7 @@ window.Notate = (function () {
     const systemGap = 24; // vertical gap between systems
     const leftMargin = 10;
     const rightMargin = 10;
-    const topMargin = 20;
+    const topMargin = 35; // increased to prevent chord symbol truncation
     const bottomMargin = 20;
     const containerWidth = Math.max(320, el.clientWidth || (el.parentElement && el.parentElement.clientWidth) || 800);
 
