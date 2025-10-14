@@ -1,0 +1,51 @@
+{
+  "totalLicks": 10,
+  "totalNotes": 212,
+  "avgNotesPerLick": 21.2,
+  "avgDuration": 0,
+  "pitchRange": {
+    "min": 55,
+    "max": 81
+  },
+  "avgPitch": 66.76886792452831,
+  "intervals": {
+    "0": 6,
+    "1": 15,
+    "2": 38,
+    "3": 21,
+    "4": 8,
+    "5": 1,
+    "8": 8,
+    "9": 4,
+    "10": 3,
+    "11": 1,
+    "14": 1,
+    "-2": 29,
+    "-1": 18,
+    "-3": 25,
+    "-4": 15,
+    "-9": 3,
+    "-8": 2,
+    "-15": 2,
+    "-11": 1,
+    "-7": 1
+  },
+  "devices": {
+    "scale-run": 52,
+    "enclosure-target": 16,
+    "enclosure-fill": 16,
+    "enclosure": 32,
+    "arpeggio": 96
+  },
+  "functions": {
+    "chord-tone": 150,
+    "scale-step": 47,
+    "chromatic": 15
+  },
+  "progressions": {
+    "I-vi-ii-V": 3,
+    "ii-V-I": 2,
+    "V-I": 3,
+    "ii-V": 2
+  }
+}

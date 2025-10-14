@@ -1,0 +1,24 @@
+{
+  "midiRange": {
+    "min": 55,
+    "max": 81
+  },
+  "devices": [
+    "scale-run",
+    "enclosure-target",
+    "enclosure-fill",
+    "enclosure",
+    "arpeggio"
+  ],
+  "functions": [
+    "chord-tone",
+    "scale-step",
+    "chromatic"
+  ],
+  "progressions": [
+    "I-vi-ii-V",
+    "ii-V-I",
+    "V-I",
+    "ii-V"
+  ]
+}
