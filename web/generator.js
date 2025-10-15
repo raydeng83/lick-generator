@@ -532,7 +532,7 @@ window.LickGen = (function () {
     const result = [...notes];
 
     for (const place of selectedPlaces) {
-      const { startIdx, endIdx } = place;
+      const { startIdx, endIdx, measureNum } = place;
 
       // Calculate combined duration and timing
       const startBeat = result[startIdx].startBeat;
@@ -541,6 +541,17 @@ window.LickGen = (function () {
       // Add duration of all consecutive notes
       for (let idx = startIdx + 1; idx <= endIdx; idx++) {
         totalDuration += result[idx].durationBeats;
+      }
+
+      // IMPORTANT: Ensure rest doesn't extend beyond measure boundary
+      // Each measure is 4 beats (measure 0: 0-4, measure 1: 4-8, etc.)
+      const measureEnd = (measureNum + 1) * 4;
+      const restEnd = startBeat + totalDuration;
+
+      if (restEnd > measureEnd) {
+        // Clip rest duration to stay within measure boundary
+        totalDuration = measureEnd - startBeat;
+        console.log(`[Generator] Clipped rest at beat ${startBeat} from ${restEnd - startBeat} to ${totalDuration} beats (measure boundary at ${measureEnd})`);
       }
 
       // Create rest note with combined duration
