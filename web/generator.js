@@ -703,5 +703,6 @@ window.LickGen = (function () {
     prefillTargets,
     selectDevicesForMeasures,
     generateWithTargets,
+    insertRandomRests,  // Expose for direct use
   };
 })();

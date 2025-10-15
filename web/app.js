@@ -53,7 +53,28 @@
     });
   }
 
+  // Toggle rests when checkbox changes (without regenerating)
+  if (ui.insertRests) {
+    ui.insertRests.addEventListener("change", () => {
+      if (lastModelWithoutRests) {
+        // Apply or remove rests based on checkbox state
+        const finalLick = ui.insertRests.checked
+          ? applyRandomRests(lastModelWithoutRests.lick)
+          : lastModelWithoutRests.lick;
+
+        lastModel = {
+          ...lastModelWithoutRests,
+          lick: finalLick
+        };
+
+        renderAll(lastModel);
+        setStatus(ui.insertRests.checked ? "Rests inserted." : "Rests removed.");
+      }
+    });
+  }
+
   let lastModel = null;
+  let lastModelWithoutRests = null; // Store version without inserted rests
 
   function setStatus(s) { ui.status.textContent = s; }
 
@@ -113,13 +134,43 @@
       deviceStrategy: deviceStrategyValue,
       useDevices: deviceStrategyValue !== 'disabled',
       swing: 0,  // Always generate with straight timing (swing applied at playback)
-      insertRests: ui.insertRests.checked  // Random rest insertion
+      insertRests: false  // Always generate without rests first
     };
 
-    const lick = LickGen.generateLick(progression, meta, options);
-    const model = { progression, bars, lick, metadata: meta };
+    // Generate base lick without rests
+    const lickWithoutRests = LickGen.generateLick(progression, meta, options);
+
+    // Store the version without rests
+    lastModelWithoutRests = { progression, bars, lick: lickWithoutRests, metadata: meta };
+
+    // Apply rests if checkbox is checked
+    const finalLick = ui.insertRests.checked
+      ? applyRandomRests(lickWithoutRests)
+      : lickWithoutRests;
+
+    const model = { progression, bars, lick: finalLick, metadata: meta };
     lastModel = model;
     return model;
+  }
+
+  // Apply random rests to a lick (can be toggled on/off)
+  function applyRandomRests(lick) {
+    if (!lick || lick.length === 0) return lick;
+
+    // Use the generator's insertRandomRests logic
+    // We need to call it with the lick data
+    const options = { insertRests: true };
+
+    // Clone the lick to avoid modifying the original
+    const lickCopy = JSON.parse(JSON.stringify(lick));
+
+    // Call the internal rest insertion function
+    // Note: We'll need to expose this from the generator
+    if (window.LickGen.insertRandomRests) {
+      return window.LickGen.insertRandomRests(lickCopy, options);
+    }
+
+    return lickCopy;
   }
 
   function renderAll(model) {
