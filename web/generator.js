@@ -401,7 +401,7 @@ window.LickGen = (function () {
     // Identify protected notes (cannot be replaced)
     const protectedIndices = new Set();
 
-    // Find first note of each measure (at beat 0, 4, 8, 12, etc.)
+    // Pass 1: Protect first note of each measure and ending notes
     notes.forEach((note, idx) => {
       if (note.isRest) return;
 
@@ -410,16 +410,34 @@ window.LickGen = (function () {
         protectedIndices.add(idx);
       }
 
-      // Protect enclosure pattern notes
-      if (note.device === 'enclosure' ||
-          note.device === 'enclosure-target' ||
-          note.device === 'enclosure-fill') {
-        protectedIndices.add(idx);
-      }
-
       // Protect ending notes
       if (note.device === 'ending') {
         protectedIndices.add(idx);
+      }
+    });
+
+    // Pass 2: Protect only the approach notes immediately before targets
+    // (2-3 notes before each enclosure-target)
+    notes.forEach((note, idx) => {
+      if (note.isRest) return;
+
+      if (note.device === 'enclosure-target') {
+        // Protect the target itself
+        protectedIndices.add(idx);
+
+        // Protect 2-3 notes before the target (the actual enclosure approach)
+        // Look back up to 3 notes
+        for (let lookBack = 1; lookBack <= 3 && idx - lookBack >= 0; lookBack++) {
+          const prevNote = notes[idx - lookBack];
+          if (!prevNote.isRest &&
+              (prevNote.device === 'enclosure' ||
+               prevNote.device === 'enclosure-fill')) {
+            protectedIndices.add(idx - lookBack);
+          } else {
+            // Stop looking back if we hit a non-enclosure note
+            break;
+          }
+        }
       }
     });
 
