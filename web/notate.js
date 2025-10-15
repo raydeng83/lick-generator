@@ -106,7 +106,17 @@ window.Notate = (function () {
       const end = seg.startBeat + seg.durationBeats;
       const segNotes = lick
         .filter(n => n.startBeat >= start && n.startBeat < end)
-        .sort((a, b) => a.startBeat - b.startBeat);
+        .sort((a, b) => a.startBeat - b.startBeat)
+        .map(n => {
+          // Clip notes that extend beyond measure boundary
+          const noteEnd = n.startBeat + n.durationBeats;
+          if (noteEnd > end) {
+            const clippedDuration = end - n.startBeat;
+            console.warn(`[Notate] Clipping note that extends beyond measure: ${n.startBeat} + ${n.durationBeats} -> ${n.startBeat} + ${clippedDuration}`);
+            return { ...n, durationBeats: clippedDuration };
+          }
+          return n;
+        });
 
       // Safety check: if no notes in this measure, fill with rests
       if (segNotes.length === 0) {
