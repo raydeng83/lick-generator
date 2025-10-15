@@ -1442,9 +1442,7 @@ window.DevicesNew = (function () {
     }
   }
 
-  function generateMeasure(context, strategy = 'varied') {
-    const deviceType = selectDevice(context, strategy);
-
+  function generateMeasure(context, deviceType = 'arpeggio') {
     switch (deviceType) {
       case 'arpeggio':
         return generateArpeggio(context);
