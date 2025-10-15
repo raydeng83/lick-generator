@@ -134,7 +134,7 @@ window.Scales = (function () {
   /**
    * Select a scale for a chord using a strategy
    * @param {string} chordQuality - Chord quality
-   * @param {string} strategy - Selection strategy: 'default', 'varied', 'exotic'
+   * @param {string} strategy - Selection strategy: 'default', 'varied', 'exotic', 'per-family-varied'
    * @returns {string} Selected scale name
    */
   function selectScale(chordQuality, strategy = 'default') {
@@ -155,6 +155,22 @@ window.Scales = (function () {
         const exoticScales = availableScales.slice(exoticIndex);
         return exoticScales[Math.floor(Math.random() * exoticScales.length)];
 
+      case 'per-family-varied':
+        // Rule 3: Randomly choose from scales within the chord's family
+        // For minor chords, use any minor family scale
+        // For dominant chords, use any dominant family scale
+        // For major chords, use any major family scale
+        const family = getChordFamily(chordQuality);
+        const familyScales = SCALE_FAMILIES[family];
+
+        if (familyScales && familyScales.length > 0) {
+          // Pick random scale from family
+          return familyScales[Math.floor(Math.random() * familyScales.length)];
+        }
+
+        // Fallback to available scales for this specific chord
+        return availableScales[Math.floor(Math.random() * availableScales.length)];
+
       default:
         return availableScales[0];
     }
@@ -172,6 +188,42 @@ window.Scales = (function () {
       }
     }
     return null;
+  }
+
+  /**
+   * Get the family for a given chord quality (Rule 3)
+   * Maps chord qualities to their scale families
+   * @param {string} chordQuality - Chord quality (e.g., 'm7', '7', 'maj7')
+   * @returns {string|null} Family name ('minor', 'dominant', 'major', 'diminished') or null
+   */
+  function getChordFamily(chordQuality) {
+    // Major 7th chords -> major family
+    if (['maj7', 'maj7#11', 'maj7#5'].includes(chordQuality)) {
+      return 'major';
+    }
+
+    // Dominant 7th chords -> dominant family
+    if (['7', '7#11', '7b13', '7#5', '7b9', '7#9', '7#9b13', '7alt', '7sus4b9'].includes(chordQuality)) {
+      return 'dominant';
+    }
+
+    // Minor 7th chords -> minor family
+    if (['m7', 'mMaj7', 'm7b6'].includes(chordQuality)) {
+      return 'minor';
+    }
+
+    // Half-diminished and diminished -> diminished family
+    if (['m7b5', 'dim7'].includes(chordQuality)) {
+      return 'diminished';
+    }
+
+    // Sus chords -> minor family (phrygian)
+    if (['sus4b9'].includes(chordQuality)) {
+      return 'minor';
+    }
+
+    // Default fallback
+    return 'major';
   }
 
   /**
@@ -218,6 +270,7 @@ window.Scales = (function () {
     getScalesForChord,
     selectScale,
     getScaleFamily,
+    getChordFamily,
     getScaleDisplayName,
   };
 })();

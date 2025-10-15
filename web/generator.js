@@ -602,7 +602,7 @@ window.LickGen = (function () {
       const seg = findChordAtBeat(progression, measureStart);
       const rootPc = parseRoot(seg.symbol) ?? 0;
       const quality = parseQuality(seg.symbol);
-      const scaleName = window.Scales ? window.Scales.selectScale(quality, 'default') : 'major';
+      const scaleName = window.Scales ? window.Scales.selectScale(quality, options.scaleStrategy || 'default') : 'major';
 
       measures.push({
         bar,
