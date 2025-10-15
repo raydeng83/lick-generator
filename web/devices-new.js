@@ -709,25 +709,144 @@ window.DevicesNew = (function () {
       // Generate 3-note enclosure
       const enclosureNotes = generate3NoteEnclosure(middleTargetMidi, rootPc, scalePcs, chordPcs, chord, quality, scale);
 
-      // Add the 3 notes in slots 1, 2, 3
-      for (let i = 0; i < 3; i++) {
+      // Check if any of the 3 enclosure notes would violate group-of-4 rule
+      const slot1Position = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
+      const slot2Position = slot1Position + 1;
+      const slot3Position = slot2Position + 1;
+      const enclosureViolates =
+        shouldAvoidNote(enclosureNotes[0].midi, noteHistory, slot1Position) ||
+        shouldAvoidNote(enclosureNotes[1].midi, noteHistory, slot2Position) ||
+        shouldAvoidNote(enclosureNotes[2].midi, noteHistory, slot3Position);
+
+      if (enclosureViolates) {
+        // 3-note enclosure would violate, fall back to 2-note enclosure
+        // This is handled in the else block, so just set use3NoteFirst to false and continue there
+        // Re-use the 2-note enclosure code by jumping into that branch
+        // Since we can't modify use3NoteFirst after the if, we'll duplicate the 2-note logic here
+        const fillPosition = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
+        currentMidi = avoidConsecutiveDuplicate(
+          targetNote.midi,
+          () => {
+            let attempts = 0;
+            let candidate;
+            do {
+              candidate = nextScaleNote(targetNote.midi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+              attempts++;
+            } while (shouldAvoidNote(candidate, noteHistory, fillPosition) && attempts < 10);
+            return candidate;
+          }
+        );
+
+        const isChordToneNote1 = isChordTone(currentMidi, rootPc, chordPcs);
+
         notes.push({
-          startBeat: measureStart + (i + 1) * 0.5,
+          startBeat: measureStart + 0.5,
           durationBeats: 0.5,
-          midi: enclosureNotes[i].midi,
+          midi: currentMidi,
+          velocity: 0.9,
+          device: 'enclosure-fill',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
+          ruleId: isChordToneNote1 ? 'chord-tone' : 'scale-step',
+          harmonicFunction: isChordToneNote1 ? 'chord-tone' : 'scale-step',
+        });
+
+        // Middle target selection for 2-note path
+        const middleTargetPosition2 = noteHistory.length + notes.filter(n => !n.isRest).length + 3;
+        middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi, nextTarget.midi], noteHistory, middleTargetPosition2);
+
+        // Slots 2-3: 2-note enclosure approaching middle target
+        const lowerNeighbor1 = middleTargetMidi - 1;
+        const upperNeighbor1 = getUpperNeighbor(middleTargetMidi, rootPc, scalePcs);
+
+        // Check which enclosure notes would violate group-of-4 rule
+        const slot2Position = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
+        const slot3Position = slot2Position + 1;
+        const upperViolatesSlot2 = shouldAvoidNote(upperNeighbor1, noteHistory, slot2Position);
+        const lowerViolatesSlot2 = shouldAvoidNote(lowerNeighbor1, noteHistory, slot2Position);
+        const upperViolatesSlot3 = shouldAvoidNote(upperNeighbor1, noteHistory, slot3Position);
+        const lowerViolatesSlot3 = shouldAvoidNote(lowerNeighbor1, noteHistory, slot3Position);
+
+        // Choose enclosure type based on which order avoids violations
+        let enclosureType1;
+        if (upperViolatesSlot2 || lowerViolatesSlot3) {
+          enclosureType1 = 'lower-upper';
+        } else if (lowerViolatesSlot2 || upperViolatesSlot3) {
+          enclosureType1 = 'upper-lower';
+        } else {
+          enclosureType1 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+        }
+
+        const firstEnclosureMidi = enclosureType1 === 'upper-lower' ? upperNeighbor1 : lowerNeighbor1;
+
+        if (firstEnclosureMidi === currentMidi) {
+          enclosureType1 = enclosureType1 === 'upper-lower' ? 'lower-upper' : 'upper-lower';
+        }
+
+        const upperIsChordTone1 = isChordTone(upperNeighbor1, rootPc, chordPcs);
+        const lowerIsChordTone1 = isChordTone(lowerNeighbor1, rootPc, chordPcs);
+
+        const slot2Midi = enclosureType1 === 'upper-lower' ? upperNeighbor1 : lowerNeighbor1;
+        notes.push({
+          startBeat: measureStart + 1.0,
+          durationBeats: 0.5,
+          midi: slot2Midi,
           velocity: 0.9,
           device: 'enclosure',
-          enclosureType: enclosureNotes[i].type,
+          enclosureType: enclosureType1 === 'upper-lower' ? 'upper' : 'lower',
           chordSymbol: chord.symbol,
           rootPc,
           quality,
           scaleName: scale,
           ruleId: 'enclosure',
-          harmonicFunction: enclosureNotes[i].harmonicFunction,
+          harmonicFunction: enclosureType1 === 'upper-lower'
+            ? (upperIsChordTone1 ? 'chord-tone' : 'scale-step')
+            : (lowerIsChordTone1 ? 'chord-tone' : 'chromatic'),
         });
-      }
 
-      currentMidi = enclosureNotes[2].midi; // Last enclosure note
+        const slot3Midi = enclosureType1 === 'upper-lower' ? lowerNeighbor1 : upperNeighbor1;
+        notes.push({
+          startBeat: measureStart + 1.5,
+          durationBeats: 0.5,
+          midi: slot3Midi,
+          velocity: 0.9,
+          device: 'enclosure',
+          enclosureType: enclosureType1 === 'upper-lower' ? 'lower' : 'upper',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
+          ruleId: 'enclosure',
+          harmonicFunction: enclosureType1 === 'upper-lower'
+            ? (lowerIsChordTone1 ? 'chord-tone' : 'chromatic')
+            : (upperIsChordTone1 ? 'chord-tone' : 'scale-step'),
+        });
+
+        currentMidi = slot3Midi;
+      } else {
+        // 3-note enclosure is safe, use it
+        // Add the 3 notes in slots 1, 2, 3
+        for (let i = 0; i < 3; i++) {
+          notes.push({
+            startBeat: measureStart + (i + 1) * 0.5,
+            durationBeats: 0.5,
+            midi: enclosureNotes[i].midi,
+            velocity: 0.9,
+            device: 'enclosure',
+            enclosureType: enclosureNotes[i].type,
+            chordSymbol: chord.symbol,
+            rootPc,
+            quality,
+            scaleName: scale,
+            ruleId: 'enclosure',
+            harmonicFunction: enclosureNotes[i].harmonicFunction,
+          });
+        }
+
+        currentMidi = enclosureNotes[2].midi; // Last enclosure note
+      }
     } else {
       // 2-note enclosure: slot 1 fill, slots 2-3 enclosure, slot 4 target
       // Slot 1: Fill note with scale step
@@ -771,9 +890,30 @@ window.DevicesNew = (function () {
       const lowerNeighbor1 = middleTargetMidi - 1;
       const upperNeighbor1 = getUpperNeighbor(middleTargetMidi, rootPc, scalePcs);
 
-      let enclosureType1 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+      // Check which enclosure notes would violate group-of-4 rule
+      const slot2Position = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
+      const slot3Position = slot2Position + 1;
+      const upperViolatesSlot2 = shouldAvoidNote(upperNeighbor1, noteHistory, slot2Position);
+      const lowerViolatesSlot2 = shouldAvoidNote(lowerNeighbor1, noteHistory, slot2Position);
+      const upperViolatesSlot3 = shouldAvoidNote(upperNeighbor1, noteHistory, slot3Position);
+      const lowerViolatesSlot3 = shouldAvoidNote(lowerNeighbor1, noteHistory, slot3Position);
+
+      // Choose enclosure type based on which order avoids violations
+      let enclosureType1;
+      if (upperViolatesSlot2 || lowerViolatesSlot3) {
+        // upper-lower would violate, use lower-upper
+        enclosureType1 = 'lower-upper';
+      } else if (lowerViolatesSlot2 || upperViolatesSlot3) {
+        // lower-upper would violate, use upper-lower
+        enclosureType1 = 'upper-lower';
+      } else {
+        // Neither violates, choose randomly
+        enclosureType1 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+      }
+
       const firstEnclosureMidi = enclosureType1 === 'upper-lower' ? upperNeighbor1 : lowerNeighbor1;
 
+      // Additional check: swap if first note duplicates current note
       if (firstEnclosureMidi === currentMidi) {
         enclosureType1 = enclosureType1 === 'upper-lower' ? 'lower-upper' : 'upper-lower';
       }
@@ -854,22 +994,131 @@ window.DevicesNew = (function () {
       // 3-note enclosure: slots 5, 6, 7 approach next target (slot 8/next measure)
       const enclosureNotes = generate3NoteEnclosure(nextTargetMidi, nextTarget.rootPc || rootPc, nextScalePcs, chordPcs, chord, quality, scale);
 
-      // Add the 3 notes in slots 5, 6, 7
-      for (let i = 0; i < 3; i++) {
+      // Check if any of the 3 enclosure notes would violate group-of-4 rule
+      const slot5Position = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
+      const slot6Position = slot5Position + 1;
+      const slot7Position = slot6Position + 1;
+      const enclosureViolates =
+        shouldAvoidNote(enclosureNotes[0].midi, noteHistory, slot5Position) ||
+        shouldAvoidNote(enclosureNotes[1].midi, noteHistory, slot6Position) ||
+        shouldAvoidNote(enclosureNotes[2].midi, noteHistory, slot7Position);
+
+      if (enclosureViolates) {
+        // 3-note enclosure would violate, fall back to 2-note enclosure
+        // Slot 5: Fill note
+        const fill2Position = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
+        currentMidi = avoidConsecutiveDuplicate(
+          finalMiddleTargetMidi,
+          () => {
+            let attempts = 0;
+            let candidate;
+            do {
+              candidate = nextScaleNote(finalMiddleTargetMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+              attempts++;
+            } while (shouldAvoidNote(candidate, noteHistory, fill2Position) && attempts < 10);
+            return candidate;
+          }
+        );
+
+        const isChordToneNote2 = isChordTone(currentMidi, rootPc, chordPcs);
+
         notes.push({
-          startBeat: measureStart + (i + 5) * 0.5,
+          startBeat: measureStart + 2.5,
           durationBeats: 0.5,
-          midi: enclosureNotes[i].midi,
+          midi: currentMidi,
+          velocity: 0.9,
+          device: 'enclosure-fill',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
+          ruleId: isChordToneNote2 ? 'chord-tone' : 'scale-step',
+          harmonicFunction: isChordToneNote2 ? 'chord-tone' : 'scale-step',
+        });
+
+        // Slots 6-7: 2-note enclosure approaching next target
+        const lowerNeighbor2 = nextTargetMidi - 1;
+        const upperNeighbor2 = getUpperNeighbor(nextTargetMidi, nextTarget.rootPc || rootPc, nextScalePcs);
+
+        // Check which enclosure notes would violate group-of-4 rule
+        const slot6Position = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
+        const slot7Position = slot6Position + 1;
+        const upperViolatesSlot6 = shouldAvoidNote(upperNeighbor2, noteHistory, slot6Position);
+        const lowerViolatesSlot6 = shouldAvoidNote(lowerNeighbor2, noteHistory, slot6Position);
+        const upperViolatesSlot7 = shouldAvoidNote(upperNeighbor2, noteHistory, slot7Position);
+        const lowerViolatesSlot7 = shouldAvoidNote(lowerNeighbor2, noteHistory, slot7Position);
+
+        // Choose enclosure type based on which order avoids violations
+        let enclosureType2;
+        if (upperViolatesSlot6 || lowerViolatesSlot7) {
+          enclosureType2 = 'lower-upper';
+        } else if (lowerViolatesSlot6 || upperViolatesSlot7) {
+          enclosureType2 = 'upper-lower';
+        } else {
+          enclosureType2 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+        }
+
+        const firstEnclosureMidi2 = enclosureType2 === 'upper-lower' ? upperNeighbor2 : lowerNeighbor2;
+
+        if (firstEnclosureMidi2 === currentMidi) {
+          enclosureType2 = enclosureType2 === 'upper-lower' ? 'lower-upper' : 'upper-lower';
+        }
+
+        const upperIsChordTone2 = isChordTone(upperNeighbor2, rootPc, chordPcs);
+        const lowerIsChordTone2 = isChordTone(lowerNeighbor2, rootPc, chordPcs);
+
+        notes.push({
+          startBeat: measureStart + 3.0,
+          durationBeats: 0.5,
+          midi: enclosureType2 === 'upper-lower' ? upperNeighbor2 : lowerNeighbor2,
           velocity: 0.9,
           device: 'enclosure',
-          enclosureType: enclosureNotes[i].type,
+          enclosureType: enclosureType2 === 'upper-lower' ? 'upper' : 'lower',
           chordSymbol: chord.symbol,
           rootPc,
           quality,
           scaleName: scale,
           ruleId: 'enclosure',
-          harmonicFunction: enclosureNotes[i].harmonicFunction,
+          harmonicFunction: enclosureType2 === 'upper-lower'
+            ? (upperIsChordTone2 ? 'chord-tone' : 'scale-step')
+            : (lowerIsChordTone2 ? 'chord-tone' : 'chromatic'),
         });
+
+        notes.push({
+          startBeat: measureStart + 3.5,
+          durationBeats: 0.5,
+          midi: enclosureType2 === 'upper-lower' ? lowerNeighbor2 : upperNeighbor2,
+          velocity: 0.9,
+          device: 'enclosure',
+          enclosureType: enclosureType2 === 'upper-lower' ? 'lower' : 'upper',
+          chordSymbol: chord.symbol,
+          rootPc,
+          quality,
+          scaleName: scale,
+          ruleId: 'enclosure',
+          harmonicFunction: enclosureType2 === 'upper-lower'
+            ? (lowerIsChordTone2 ? 'chord-tone' : 'chromatic')
+            : (upperIsChordTone2 ? 'chord-tone' : 'scale-step'),
+        });
+      } else {
+        // 3-note enclosure is safe, use it
+        // Add the 3 notes in slots 5, 6, 7
+        for (let i = 0; i < 3; i++) {
+          notes.push({
+            startBeat: measureStart + (i + 5) * 0.5,
+            durationBeats: 0.5,
+            midi: enclosureNotes[i].midi,
+            velocity: 0.9,
+            device: 'enclosure',
+            enclosureType: enclosureNotes[i].type,
+            chordSymbol: chord.symbol,
+            rootPc,
+            quality,
+            scaleName: scale,
+            ruleId: 'enclosure',
+            harmonicFunction: enclosureNotes[i].harmonicFunction,
+          });
+        }
       }
     } else {
       // 2-note enclosure: slot 5 fill, slots 6-7 enclosure
@@ -909,9 +1158,30 @@ window.DevicesNew = (function () {
       const lowerNeighbor2 = nextTargetMidi - 1;
       const upperNeighbor2 = getUpperNeighbor(nextTargetMidi, nextTarget.rootPc || rootPc, nextScalePcs);
 
-      let enclosureType2 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+      // Check which enclosure notes would violate group-of-4 rule
+      const slot6Position = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
+      const slot7Position = slot6Position + 1;
+      const upperViolatesSlot6 = shouldAvoidNote(upperNeighbor2, noteHistory, slot6Position);
+      const lowerViolatesSlot6 = shouldAvoidNote(lowerNeighbor2, noteHistory, slot6Position);
+      const upperViolatesSlot7 = shouldAvoidNote(upperNeighbor2, noteHistory, slot7Position);
+      const lowerViolatesSlot7 = shouldAvoidNote(lowerNeighbor2, noteHistory, slot7Position);
+
+      // Choose enclosure type based on which order avoids violations
+      let enclosureType2;
+      if (upperViolatesSlot6 || lowerViolatesSlot7) {
+        // upper-lower would violate, use lower-upper
+        enclosureType2 = 'lower-upper';
+      } else if (lowerViolatesSlot6 || upperViolatesSlot7) {
+        // lower-upper would violate, use upper-lower
+        enclosureType2 = 'upper-lower';
+      } else {
+        // Neither violates, choose randomly
+        enclosureType2 = Math.random() < 0.5 ? 'upper-lower' : 'lower-upper';
+      }
+
       const firstEnclosureMidi2 = enclosureType2 === 'upper-lower' ? upperNeighbor2 : lowerNeighbor2;
 
+      // Additional check: swap if first note duplicates current note
       if (firstEnclosureMidi2 === currentMidi) {
         enclosureType2 = enclosureType2 === 'upper-lower' ? 'lower-upper' : 'upper-lower';
       }
