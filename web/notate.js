@@ -108,6 +108,20 @@ window.Notate = (function () {
         .filter(n => n.startBeat >= start && n.startBeat < end)
         .sort((a, b) => a.startBeat - b.startBeat);
 
+      // Safety check: if no notes in this measure, fill with rests
+      if (segNotes.length === 0) {
+        console.warn('[Notate] No notes in measure:', seg.symbol, 'filling with rests');
+        // Create a full measure of rests
+        const wholeRest = new VF.StaveNote({ keys: ["b/4"], duration: "wr", auto_stem: true });
+        const voice = new VF.Voice({ num_beats: 4, beat_value: 4 }).setStrict(false);
+        voice.addTickables([wholeRest]);
+        const formatter = new VF.Formatter().joinVoices([voice]);
+        const noteArea = Math.max(10, (stave.getNoteEndX() - stave.getNoteStartX()) - 8);
+        formatter.format([voice], noteArea);
+        voice.draw(ctx, stave);
+        continue;
+      }
+
       // Build exactly 8 eighth-note slots (4/4) using integer eighths to avoid float drift
       const notes = [];
       let cursorE8 = 0; // 0..8
@@ -354,8 +368,6 @@ window.Notate = (function () {
       }
 
       try {
-        console.log('[Notate] Creating voice with', validNotes.length, 'notes for measure:', seg.symbol);
-
         const voice = new VF.Voice({ num_beats: 4, beat_value: 4 }).setStrict(true);
         voice.addTickables(validNotes);
 
@@ -371,10 +383,8 @@ window.Notate = (function () {
           maintain_stem_directions: false,
         });
 
-        console.log('[Notate] Drawing voice...');
         voice.draw(ctx, stave);
 
-        console.log('[Notate] Drawing', beams.length, 'beams...');
         // Filter out any null/undefined beams before drawing
         beams.filter(b => b).forEach(b => b.setContext(ctx).draw());
 
@@ -438,8 +448,6 @@ window.Notate = (function () {
             }
           }
         });
-
-        console.log('[Notate] Measure rendered successfully');
 
         // Draw chord symbol and scale name as text above the stave (after voice is drawn)
         try {
