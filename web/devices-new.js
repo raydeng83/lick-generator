@@ -1426,6 +1426,10 @@ window.DevicesNew = (function () {
       case 'scale-focused':
         return 'scale-run';
 
+      case 'arpeggio-scale-mix':
+        // 50/50 random between arpeggio and scale-run
+        return Math.random() < 0.5 ? 'arpeggio' : 'scale-run';
+
       case 'cell-focused':
         return 'melodic-cell';
 
