@@ -132,6 +132,18 @@ window.Notate = (function () {
         continue;
       }
 
+      // Debug: log segNotes to see if rests are present
+      console.log(`[Notate DEBUG] ${seg.symbol} - segNotes from lick data (${segNotes.length} total):`,
+        segNotes.map((n, i) => ({
+          index: i,
+          startBeat: n.startBeat,
+          durationBeats: n.durationBeats,
+          isRest: n.isRest,
+          midi: n.midi,
+          device: n.device
+        }))
+      );
+
       // Build exactly 8 eighth-note slots (4/4) using integer eighths to avoid float drift
       const notes = [];
       let cursorE8 = 0; // 0..8
@@ -248,7 +260,14 @@ window.Notate = (function () {
           }
 
           const dur = durationFromBeats(restDuration);
-          notes.push(new VF.StaveNote({ keys: ["b/4"], duration: dur + "r", auto_stem: true }));
+          const restNote = new VF.StaveNote({ keys: ["b/4"], duration: dur + "r", auto_stem: true });
+          restNote.startBeat = currentBeat;
+          restNote.durationBeats = restDuration;
+          restNote._isRestNote = true; // EXPLICIT FLAG: Mark this as a rest for beaming logic
+          console.log(`[Notate DEBUG]     Created rest: duration="${dur}r", startBeat=${currentBeat}, notes.length before push=${notes.length}`);
+          notes.push(restNote);
+          console.log(`[Notate DEBUG]     Pushed rest, notes.length after push=${notes.length}, notes array:`,
+            notes.map((n, i) => `[${i}] ${n.duration}@${n.startBeat}${n._isRestNote ? 'r' : ''}`).join(', '));
 
           const durE8 = Math.round(restDuration * 2);
           cursorE8 += durE8;
@@ -261,17 +280,24 @@ window.Notate = (function () {
       for (const n of segNotes) {
         // Handle rest notes
         if (n.isRest) {
+          console.log(`[Notate DEBUG] Processing REST at beat ${n.startBeat}, duration ${n.durationBeats}, cursorE8 BEFORE = ${cursorE8}`);
           const relStartE8 = Math.round((n.startBeat - start) * 2);
 
           // Fill gaps before this rest using midpoint-aware logic
           if (cursorE8 < relStartE8) {
+            console.log(`[Notate DEBUG]   Filling gap from cursorE8=${cursorE8} to relStartE8=${relStartE8}`);
             const gapStartBeat = start + (cursorE8 / 2);
             const gapDurationBeats = (relStartE8 - cursorE8) / 2;
             addRestsForGap(gapStartBeat, gapDurationBeats);
+            console.log(`[Notate DEBUG]   After gap fill, cursorE8 = ${cursorE8}`);
           }
 
           // Add the explicit rest note using midpoint-aware logic
+          console.log(`[Notate DEBUG]   Adding explicit rest, cursorE8 BEFORE = ${cursorE8}`);
           addRestsForGap(n.startBeat, n.durationBeats);
+          console.log(`[Notate DEBUG]   After rest add, cursorE8 = ${cursorE8}`);
+          // Note: cursorE8 is automatically updated inside addRestsSingleHalf
+
           continue;
         }
 
@@ -281,14 +307,17 @@ window.Notate = (function () {
           continue;
         }
 
+        console.log(`[Notate DEBUG] Processing NOTE at beat ${n.startBeat}, duration ${n.durationBeats}, cursorE8 BEFORE = ${cursorE8}`);
         const relStartE8 = Math.round((n.startBeat - start) * 2);
         const durE8 = Math.round(n.durationBeats * 2);
 
         // Fill gaps before this note using midpoint-aware logic
         if (cursorE8 < relStartE8) {
+          console.log(`[Notate DEBUG]   Filling gap before note from cursorE8=${cursorE8} to relStartE8=${relStartE8}`);
           const gapStartBeat = start + (cursorE8 / 2);
           const gapDurationBeats = (relStartE8 - cursorE8) / 2;
           addRestsForGap(gapStartBeat, gapDurationBeats);
+          console.log(`[Notate DEBUG]   After gap fill, cursorE8 = ${cursorE8}`);
         }
 
         const dur = durationFromBeats(n.durationBeats);
@@ -301,6 +330,10 @@ window.Notate = (function () {
         }
 
         const sn = new VF.StaveNote({ keys: [key], duration: dur, auto_stem: true });
+
+        // Preserve startBeat for manual beaming
+        sn.startBeat = n.startBeat;
+        sn.durationBeats = n.durationBeats;
 
         // Add accidentals following standard notation rules:
         // - Show accidental on first occurrence in measure
@@ -411,7 +444,10 @@ window.Notate = (function () {
         }
 
         notes.push(sn);
+        console.log(`[Notate DEBUG]   Pushed NOTE, notes.length after push=${notes.length}, notes array:`,
+          notes.map((n, i) => `[${i}] ${n.duration}@${n.startBeat}`).join(', '));
         cursorE8 += durE8;
+        console.log(`[Notate DEBUG]   After adding note, cursorE8 = ${cursorE8}`);
         noteIndex++; // Increment index for enclosure labeling
       }
 
@@ -421,6 +457,17 @@ window.Notate = (function () {
         const gapDurationBeats = (8 - cursorE8) / 2;
         addRestsForGap(gapStartBeat, gapDurationBeats);
       }
+
+      // Debug: log all notes before filtering
+      console.log(`[Notate DEBUG] ${seg.symbol} - notes array before filtering (${notes.length} total):`,
+        notes.map((n, i) => ({
+          index: i,
+          duration: n.duration,
+          isRest: n._isRestNote || false,
+          startBeat: n.startBeat,
+          hasSetContext: typeof n.setContext === 'function'
+        }))
+      );
 
       // Validate all notes before proceeding
       const validNotes = notes.filter(n => n && typeof n.setContext === 'function');
@@ -439,12 +486,138 @@ window.Notate = (function () {
         const noteArea = Math.max(10, (stave.getNoteEndX() - stave.getNoteStartX()) - 8);
         formatter.format([voice], noteArea);
 
-        // Beam eighths within each beat (quarter grouping)
-        const beams = VF.Beam.generateBeams(validNotes, {
-          groups: [new VF.Fraction(1, 4)],
-          beam_rests: false,
-          maintain_stem_directions: false,
+        // Manual beaming based on actual beat positions
+        // This ensures beams only connect notes within the same beat boundary
+
+        // IMPORTANT: Log the actual validNotes array to debug beaming issues
+        console.log(`[Notate DEBUG] Measure ${seg.symbol}:`, validNotes.map((n, i) => ({
+          index: i,
+          duration: n.duration,
+          isRest: n._isRestNote || false,
+          startBeat: n.startBeat,
+          durationBeats: n.durationBeats,
+          keys: n.getKeys ? n.getKeys() : 'no keys'
+        })));
+
+        const beamGroups = [];
+        let currentGroup = [];
+
+        for (let i = 0; i < validNotes.length; i++) {
+          const note = validNotes[i];
+
+          // Skip rests - check explicit _isRestNote flag
+          if (note._isRestNote) {
+            // Finish current group if any
+            if (currentGroup.length >= 2) {
+              beamGroups.push(currentGroup);
+            }
+            currentGroup = [];
+            continue;
+          }
+
+          // Only beam eighth notes (duration = 0.5 beats)
+          // Check if startBeat and durationBeats are defined
+          if (typeof note.startBeat === 'undefined' || typeof note.durationBeats === 'undefined') {
+            // Missing timing info - can't reliably beam this note
+            if (currentGroup.length >= 2) {
+              beamGroups.push(currentGroup);
+            }
+            currentGroup = [];
+            continue;
+          }
+
+          if (note.durationBeats !== 0.5) {
+            // Finish current group if any
+            if (currentGroup.length >= 2) {
+              beamGroups.push(currentGroup);
+            }
+            currentGroup = [];
+            continue;
+          }
+
+          // Check if this note is within the same beat as previous note AND is consecutive
+          if (currentGroup.length > 0) {
+            const prevNote = currentGroup[currentGroup.length - 1];
+
+            // Safety check: ensure prevNote has timing info
+            if (typeof prevNote.startBeat === 'undefined' || typeof prevNote.durationBeats === 'undefined') {
+              // Previous note missing timing info - start new group
+              currentGroup = [note];
+              continue;
+            }
+
+            const prevBeat = Math.floor(prevNote.startBeat);
+            const currBeat = Math.floor(note.startBeat);
+
+            // Check if notes are consecutive (no gap between them)
+            const prevEndBeat = prevNote.startBeat + prevNote.durationBeats;
+            const isConsecutive = Math.abs(prevEndBeat - note.startBeat) < 0.01; // tolerance for float precision
+
+            if (prevBeat !== currBeat || !isConsecutive) {
+              // Different beat OR not consecutive - finish current group
+              if (currentGroup.length >= 2) {
+                beamGroups.push(currentGroup);
+              }
+              currentGroup = [note];
+            } else {
+              // Same beat AND consecutive - add to current group
+              currentGroup.push(note);
+            }
+          } else {
+            // Start new group
+            currentGroup = [note];
+          }
+        }
+
+        // Finish last group if any
+        if (currentGroup.length >= 2) {
+          beamGroups.push(currentGroup);
+        }
+
+        // Log the beam groups that were created
+        console.log(`[Notate DEBUG] Created ${beamGroups.length} beam groups for ${seg.symbol}`);
+        beamGroups.forEach((group, i) => {
+          console.log(`  Group ${i + 1}: ${group.length} notes starting at beat ${group[0].startBeat}`);
         });
+
+        // Set consistent stem directions for each beam group before creating beams
+        beamGroups.forEach(group => {
+          // Calculate average pitch to determine stem direction
+          // VexFlow uses line numbers where middle line (B4) is 0
+          let totalLine = 0;
+          group.forEach(note => {
+            // Get the key line position (approximate)
+            const keys = note.getKeys();
+            if (keys && keys.length > 0) {
+              // Parse key format like "d/4" or "f#/5"
+              const keyMatch = keys[0].match(/([a-g][#b]?)\/(\d+)/);
+              if (keyMatch) {
+                const noteLetter = keyMatch[1][0];
+                const octave = parseInt(keyMatch[2]);
+
+                // Calculate approximate line number (B4 = middle line = 0)
+                // Lines go: C4=-1, D4=0, E4=1, F4=2, G4=3, A4=4, B4=5, C5=6, etc.
+                const noteOrder = {'c': 0, 'd': 1, 'e': 2, 'f': 3, 'g': 4, 'a': 5, 'b': 6};
+                const baseLine = noteOrder[noteLetter];
+                const lineFromMiddle = baseLine + (octave - 4) * 7;
+                totalLine += lineFromMiddle;
+              }
+            }
+          });
+
+          const avgLine = totalLine / group.length;
+
+          // If average position is above middle of staff (line > 3), stems go down
+          // Otherwise stems go up
+          const stemDirection = avgLine > 3 ? VF.Stem.DOWN : VF.Stem.UP;
+
+          group.forEach(note => {
+            note.setStemDirection(stemDirection);
+          });
+        });
+
+        // Create VF.Beam objects for each valid group
+        const beams = beamGroups.map(group => new VF.Beam(group));
 
         voice.draw(ctx, stave);
 
@@ -475,8 +648,8 @@ window.Notate = (function () {
 
           for (let i = 0; i < validNotes.length; i++) {
             const vfNote = validNotes[i];
-            // Skip rests
-            if (vfNote.duration.includes('r')) continue;
+            // Skip rests - check explicit _isRestNote flag
+            if (vfNote._isRestNote) continue;
 
             if (segNoteCounter === startIdx) firstNoteIdx = i;
             if (segNoteCounter === endIdx) lastNoteIdx = i;
