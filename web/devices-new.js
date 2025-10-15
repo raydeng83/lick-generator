@@ -992,8 +992,8 @@ window.DevicesNew = (function () {
     } else {
       // Option 2: One lower + two upper
       if (startFromLowerSide) {
-        // Start from lower side: lower → inside upper → outside upper
-        enclosureNotes = [oppositeSideNote, insideNote, outsideNote];
+        // Start from lower side: lower → outside upper → inside upper
+        enclosureNotes = [oppositeSideNote, outsideNote, insideNote];
       } else {
         // Start from upper side: outside upper → inside upper → lower
         enclosureNotes = [outsideNote, insideNote, oppositeSideNote];
