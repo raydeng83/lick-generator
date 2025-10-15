@@ -666,7 +666,7 @@ window.DevicesNew = (function () {
    * For last measure: Creates enclosure targeting beat 5 and ends on that target
    */
   function generateNeighborEnclosure(context) {
-    const { chord, rootPc, quality, scale, targetNote, nextTarget, isLastMeasure } = context;
+    const { chord, rootPc, quality, scale, targetNote, nextTarget, isLastMeasure, noteHistory = [] } = context;
     const measureStart = targetNote.startBeat;
 
     if (!window.Scales) {
@@ -702,7 +702,9 @@ window.DevicesNew = (function () {
     if (use3NoteFirst) {
       // 3-note enclosure: slots 1, 2, 3 approach middle target (slot 4)
       // Middle target selection - avoid repeating current measure's 1st note and next measure's 1st note
-      middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi, nextTarget.midi]);
+      // Position calculation: noteHistory + non-rest notes so far + 4 more notes (3 enclosure + this target)
+      const middleTargetPosition = noteHistory.length + notes.filter(n => !n.isRest).length + 4;
+      middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi, nextTarget.midi], noteHistory, middleTargetPosition);
 
       // Generate 3-note enclosure
       const enclosureNotes = generate3NoteEnclosure(middleTargetMidi, rootPc, scalePcs, chordPcs, chord, quality, scale);
@@ -729,9 +731,19 @@ window.DevicesNew = (function () {
     } else {
       // 2-note enclosure: slot 1 fill, slots 2-3 enclosure, slot 4 target
       // Slot 1: Fill note with scale step
+      // Position calculation: noteHistory (previous measures) + notes pushed so far + 1 (for this note)
+      const fillPosition = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
       currentMidi = avoidConsecutiveDuplicate(
         targetNote.midi,
-        () => nextScaleNote(targetNote.midi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1)
+        () => {
+          let attempts = 0;
+          let candidate;
+          do {
+            candidate = nextScaleNote(targetNote.midi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+            attempts++;
+          } while (shouldAvoidNote(candidate, noteHistory, fillPosition) && attempts < 10);
+          return candidate;
+        }
       );
 
       const isChordToneNote1 = isChordTone(currentMidi, rootPc, chordPcs);
@@ -751,7 +763,9 @@ window.DevicesNew = (function () {
       });
 
       // Middle target selection - avoid repeating current measure's 1st note and next measure's 1st note
-      middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi, nextTarget.midi]);
+      // Position calculation: noteHistory + non-rest notes so far + 3 more notes (fill + 2 enclosure + this target)
+      const middleTargetPosition = noteHistory.length + notes.filter(n => !n.isRest).length + 3;
+      middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi, nextTarget.midi], noteHistory, middleTargetPosition);
 
       // Slots 2-3: 2-note enclosure approaching middle target
       const lowerNeighbor1 = middleTargetMidi - 1;
@@ -807,11 +821,13 @@ window.DevicesNew = (function () {
     }
 
     // Slot 4: Middle target - avoid duplicating last enclosure note and next measure's 1st note
+    // Position calculation: noteHistory + non-rest notes so far + 1 (for this note)
+    const finalMiddleTargetPosition = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
     let finalMiddleTargetMidi = middleTargetMidi;
     if (finalMiddleTargetMidi === currentMidi) {
       finalMiddleTargetMidi = avoidConsecutiveDuplicate(
         currentMidi,
-        () => selectChordTone(currentMidi, chordAbs, [targetNote.midi, currentMidi, nextTarget.midi])
+        () => selectChordTone(currentMidi, chordAbs, [targetNote.midi, currentMidi, nextTarget.midi], noteHistory, finalMiddleTargetPosition)
       );
     }
 
@@ -858,9 +874,19 @@ window.DevicesNew = (function () {
     } else {
       // 2-note enclosure: slot 5 fill, slots 6-7 enclosure
       // Slot 5: Fill note
+      // Position calculation: noteHistory + non-rest notes so far + 1 (for this note)
+      const fill2Position = noteHistory.length + notes.filter(n => !n.isRest).length + 1;
       currentMidi = avoidConsecutiveDuplicate(
         finalMiddleTargetMidi,
-        () => nextScaleNote(finalMiddleTargetMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1)
+        () => {
+          let attempts = 0;
+          let candidate;
+          do {
+            candidate = nextScaleNote(finalMiddleTargetMidi, rootPc, scalePcs, Math.random() < 0.5 ? 1 : -1);
+            attempts++;
+          } while (shouldAvoidNote(candidate, noteHistory, fill2Position) && attempts < 10);
+          return candidate;
+        }
       );
 
       const isChordToneNote2 = isChordTone(currentMidi, rootPc, chordPcs);
@@ -1008,8 +1034,10 @@ window.DevicesNew = (function () {
    * @param {number} currentMidi - Current MIDI note
    * @param {number[]} chordAbs - Absolute chord pitch classes
    * @param {number[]} excludeMidi - Optional array of MIDI notes to avoid
+   * @param {Array} noteHistory - Optional array of previously generated notes for group-of-4 rule
+   * @param {number} currentPosition - Optional current position (1-indexed) for group-of-4 rule
    */
-  function selectChordTone(currentMidi, chordAbs, excludeMidi = []) {
+  function selectChordTone(currentMidi, chordAbs, excludeMidi = [], noteHistory = [], currentPosition = 0) {
     const candidates = [];
 
     // Find chord tones in nearby octaves
@@ -1025,11 +1053,20 @@ window.DevicesNew = (function () {
     // Sort by distance from current note
     candidates.sort((a, b) => Math.abs(a - currentMidi) - Math.abs(b - currentMidi));
 
-    // Return a nearby chord tone (prefer not the exact same note or excluded notes)
-    for (const midi of candidates) {
-      if (midi !== currentMidi && !excludeMidi.includes(midi)) {
-        return midi;
-      }
+    // Filter candidates based on:
+    // 1. Not equal to currentMidi
+    // 2. Not in excludeMidi
+    // 3. Not violating group-of-4 rule (if history provided)
+    const validCandidates = candidates.filter(midi => {
+      if (midi === currentMidi) return false;
+      if (excludeMidi.includes(midi)) return false;
+      if (noteHistory.length > 0 && currentPosition > 0 && shouldAvoidNote(midi, noteHistory, currentPosition)) return false;
+      return true;
+    });
+
+    // Return first valid candidate, or fallback to first candidate
+    if (validCandidates.length > 0) {
+      return validCandidates[0];
     }
 
     // If all nearby candidates are excluded, return the first candidate (fallback)
@@ -1047,6 +1084,37 @@ window.DevicesNew = (function () {
     const pc = (midi % 12 + 12) % 12;
     const relPc = (pc - rootPc + 12) % 12;
     return chordPcs.includes(relPc);
+  }
+
+  /**
+   * Check if candidate note would violate group-of-4 repetition rule
+   * Rule: In groups of 4 (1-2-3-4, 3-4-5-6, ...):
+   *   - Position N ≠ Position N+2 (positions 1 & 3, or 2 & 4 in group)
+   *   - Position N ≠ Position N-2 (same rule, backwards)
+   *
+   * @param {number} candidateMidi - MIDI note being considered
+   * @param {Array} noteHistory - All non-rest notes generated so far
+   * @param {number} currentPosition - Position this note would have (1-indexed)
+   * @returns {boolean} True if note should be avoided
+   */
+  function shouldAvoidNote(candidateMidi, noteHistory, currentPosition) {
+    // Position is 1-indexed in the sequence of non-rest notes
+    // Check if we would violate rules with notes 2 positions before
+
+    // Check 2 positions back (if candidate is at position N, check position N-2)
+    const positionMinus2 = currentPosition - 2;
+    if (positionMinus2 >= 1 && noteHistory[positionMinus2 - 1]) {
+      const noteMinus2 = noteHistory[positionMinus2 - 1].midi;
+      if (candidateMidi === noteMinus2) {
+        return true; // Would repeat with note 2 positions back
+      }
+    }
+
+    // We can't check 2 positions forward since those notes don't exist yet
+    // But the constraint is symmetric - when we generate position N+2,
+    // it will check back to position N
+
+    return false;
   }
 
   /**

@@ -277,18 +277,29 @@ window.LickGen = (function () {
 
   function generateWithTargets(measures, options = {}) {
     const allNotes = [];
+    const noteHistory = []; // Track all non-rest notes for group-of-4 rule
 
     for (let i = 0; i < measures.length; i++) {
       const measure = measures[i];
 
+      // Add noteHistory to context
+      const enrichedContext = {
+        ...measure.context,
+        noteHistory: [...noteHistory], // Pass copy of history
+      };
+
       // Generate notes for this measure using device
       let measureNotes = [];
       if (window.DevicesNew && measure.device) {
-        measureNotes = window.DevicesNew.generateMeasure(measure.context, measure.device);
+        measureNotes = window.DevicesNew.generateMeasure(enrichedContext, measure.device);
       } else {
         // Fallback: simple pattern
         measureNotes = generateSimpleMeasure(measure);
       }
+
+      // Extract non-rest notes and add to history for next measures
+      const nonRestNotes = measureNotes.filter(n => !n.isRest);
+      noteHistory.push(...nonRestNotes);
 
       // Add to result
       for (const note of measureNotes) {
