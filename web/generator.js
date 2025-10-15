@@ -393,16 +393,41 @@ window.LickGen = (function () {
   /**
    * Insert random rests at 3 places in the lick
    * Each place replaces 1, 2, or 3 consecutive notes with a rest
-   * No restrictions - any note can be replaced
+   * Protection rules:
+   * - Never replace first note (target/chord tone)
+   * - Never replace last note (ending note)
+   * - Ensure at least 40% of notes remain as non-rests
    * Designed for rhythm practice with sparse note patterns
    */
   function insertRandomRests(notes, options = {}) {
     if (!notes || notes.length === 0) return notes;
 
-    // Build list of all non-rest note indices (no protection)
+    // Count existing non-rest notes
+    const nonRestNotes = notes.filter(n => !n.isRest);
+    if (nonRestNotes.length < 5) {
+      console.log('[Generator] Too few notes for rest insertion (need at least 5)');
+      return notes;
+    }
+
+    // Find the last non-rest note index (to protect it)
+    let lastNonRestIdx = -1;
+    for (let i = notes.length - 1; i >= 0; i--) {
+      if (!notes[i].isRest) {
+        lastNonRestIdx = i;
+        break;
+      }
+    }
+
+    if (lastNonRestIdx === -1) {
+      console.log('[Generator] All notes are rests, cannot insert more');
+      return notes;
+    }
+
+    // Build list of replaceable note indices
+    // Protection: exclude first non-rest note (always index 0) and last non-rest note
     const replaceableIndices = [];
     notes.forEach((note, idx) => {
-      if (!note.isRest) {
+      if (!note.isRest && idx !== 0 && idx !== lastNonRestIdx) {
         replaceableIndices.push(idx);
       }
     });
@@ -434,23 +459,56 @@ window.LickGen = (function () {
         return selectedPlaces.some(p => idx >= p.startIdx && idx <= p.endIdx);
       };
 
+      // Helper to check if index is protected (first or last non-rest note)
+      const isProtected = (idx) => {
+        return idx === 0 || idx === lastNonRestIdx;
+      };
+
       if (numNotesToReplace >= 2 && startIdx + 1 < notes.length) {
         const nextIdx = startIdx + 1;
-        // Check if second note is available
-        if (!notes[nextIdx].isRest && !isIndexUsed(nextIdx)) {
+        // Check if second note is available and not protected
+        if (!notes[nextIdx].isRest && !isIndexUsed(nextIdx) && !isProtected(nextIdx)) {
           endIdx = nextIdx;
         }
       }
 
       if (numNotesToReplace === 3 && endIdx === startIdx + 1 && startIdx + 2 < notes.length) {
         const thirdIdx = startIdx + 2;
-        // Check if third note is available
-        if (!notes[thirdIdx].isRest && !isIndexUsed(thirdIdx)) {
+        // Check if third note is available and not protected
+        if (!notes[thirdIdx].isRest && !isIndexUsed(thirdIdx) && !isProtected(thirdIdx)) {
           endIdx = thirdIdx;
         }
       }
 
       selectedPlaces.push({ startIdx, endIdx });
+    }
+
+    // Validate that we're not replacing too many notes
+    // Calculate how many notes will be replaced
+    const notesToReplace = selectedPlaces.reduce((sum, p) => sum + (p.endIdx - p.startIdx + 1), 0);
+    const minNotesToKeep = Math.ceil(nonRestNotes.length * 0.4); // Keep at least 40%
+    const notesRemaining = nonRestNotes.length - notesToReplace;
+
+    if (notesRemaining < minNotesToKeep) {
+      console.log(`[Generator] Would replace too many notes (${notesToReplace}/${nonRestNotes.length}), keeping minimum ${minNotesToKeep}`);
+      // Remove the last selected place (the one that would replace the most notes)
+      selectedPlaces.sort((a, b) => {
+        const sizeA = a.endIdx - a.startIdx + 1;
+        const sizeB = b.endIdx - b.startIdx + 1;
+        return sizeB - sizeA; // Sort by size descending
+      });
+      // Remove places until we meet the threshold
+      while (selectedPlaces.length > 0) {
+        const totalToReplace = selectedPlaces.reduce((sum, p) => sum + (p.endIdx - p.startIdx + 1), 0);
+        const remaining = nonRestNotes.length - totalToReplace;
+        if (remaining >= minNotesToKeep) break;
+        selectedPlaces.pop(); // Remove the largest place
+      }
+    }
+
+    if (selectedPlaces.length === 0) {
+      console.log('[Generator] No valid places to insert rests after validation');
+      return notes;
     }
 
     // Sort places by index to process from end to beginning (avoids index shifting issues)
