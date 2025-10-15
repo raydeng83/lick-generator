@@ -14,7 +14,8 @@
     swingValue: $("#swingValue"),
     metronome: $("#metronome"),
     chords: $("#chords"),
-    insertRests: $("#insertRests"),
+    showRests: $("#showRests"),
+    regenerateRests: $("#regenerateRests"),
     coloredNotes: $("#coloredNotes"),
     generate: $("#generate"),
     play: $("#play"),
@@ -53,13 +54,13 @@
     });
   }
 
-  // Toggle rests when checkbox changes (without regenerating)
-  if (ui.insertRests) {
-    ui.insertRests.addEventListener("change", () => {
+  // Toggle showing/hiding rests (without regenerating the rest pattern)
+  if (ui.showRests) {
+    ui.showRests.addEventListener("change", () => {
       if (lastModelWithoutRests) {
-        // Apply or remove rests based on checkbox state
-        const finalLick = ui.insertRests.checked
-          ? applyRandomRests(lastModelWithoutRests.lick)
+        // Show rests or hide rests based on checkbox state
+        const finalLick = ui.showRests.checked && lastModelWithRests
+          ? lastModelWithRests.lick
           : lastModelWithoutRests.lick;
 
         lastModel = {
@@ -68,13 +69,38 @@
         };
 
         renderAll(lastModel);
-        setStatus(ui.insertRests.checked ? "Rests inserted." : "Rests removed.");
+        setStatus(ui.showRests.checked ? "Showing rests." : "Hiding rests.");
+      }
+    });
+  }
+
+  // Generate new rest pattern button
+  if (ui.regenerateRests) {
+    ui.regenerateRests.addEventListener("click", () => {
+      if (lastModelWithoutRests) {
+        // Generate a NEW random rest pattern
+        const lickWithNewRests = applyRandomRests(lastModelWithoutRests.lick);
+
+        lastModelWithRests = {
+          ...lastModelWithoutRests,
+          lick: lickWithNewRests
+        };
+
+        // If "Show Rests" is checked, display the new pattern immediately
+        if (ui.showRests.checked) {
+          lastModel = lastModelWithRests;
+          renderAll(lastModel);
+          setStatus("New rest pattern generated.");
+        } else {
+          setStatus("New rest pattern generated (check 'Show Rests' to view).");
+        }
       }
     });
   }
 
   let lastModel = null;
   let lastModelWithoutRests = null; // Store version without inserted rests
+  let lastModelWithRests = null; // Store version with current rest pattern
 
   function setStatus(s) { ui.status.textContent = s; }
 
@@ -143,12 +169,11 @@
     // Store the version without rests
     lastModelWithoutRests = { progression, bars, lick: lickWithoutRests, metadata: meta };
 
-    // Apply rests if checkbox is checked
-    const finalLick = ui.insertRests.checked
-      ? applyRandomRests(lickWithoutRests)
-      : lickWithoutRests;
+    // Reset the rest pattern when generating a new lick
+    lastModelWithRests = null;
 
-    const model = { progression, bars, lick: finalLick, metadata: meta };
+    // Show the lick without rests by default
+    const model = { progression, bars, lick: lickWithoutRests, metadata: meta };
     lastModel = model;
     return model;
   }
