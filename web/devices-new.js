@@ -1565,8 +1565,24 @@ window.DevicesNew = (function () {
   // ========== HELPER FUNCTIONS ==========
 
   /**
+   * Get the midpoint beat of the measure containing the given beat
+   * In 4/4 time, each measure is 4 beats, and the midpoint is at beat 2 of each measure
+   * @param {number} beat - A beat position
+   * @returns {number} The beat position of the measure's midpoint
+   */
+  function getMeasureMidpoint(beat) {
+    // Each measure is 4 beats
+    // Midpoint is at beat 2 of each measure (beats 2, 6, 10, etc.)
+    const measureStart = Math.floor(beat / 4) * 4;
+    return measureStart + 2;
+  }
+
+  /**
    * Generate properly combined rests according to music notation rules
    * Combines consecutive rests into larger note values (quarter, half) when possible
+   * IMPORTANT: Follows the "break the middle of the bar" rule - rests cannot cross
+   * the measure midpoint (beat 2 of each measure in 4/4 time)
+   *
    * @param {number} startBeat - Starting beat for the rest(s)
    * @param {number} totalBeats - Total duration of rest in beats
    * @param {object} chord - Chord context (symbol, rootPc, quality, scaleName)
@@ -1578,17 +1594,37 @@ window.DevicesNew = (function () {
     let remainingBeats = totalBeats;
 
     while (remainingBeats > 0) {
+      // Calculate measure context
+      const measureMidpoint = getMeasureMidpoint(currentBeat);
+      const beatsUntilMidpoint = measureMidpoint - currentBeat;
+
       let restDuration;
 
-      if (remainingBeats >= 2) {
-        // Use half rest (2 beats) when possible
-        restDuration = 2;
-      } else if (remainingBeats >= 1) {
-        // Use quarter rest (1 beat)
-        restDuration = 1;
+      // Check if we're before the midpoint
+      if (currentBeat < measureMidpoint) {
+        // FIRST HALF: Cannot cross midpoint with rest duration
+        if (remainingBeats >= 2 && beatsUntilMidpoint >= 2) {
+          // Safe to use half rest (stays entirely in first half)
+          restDuration = 2;
+        } else if (remainingBeats >= 1 && beatsUntilMidpoint >= 1) {
+          // Use quarter rest
+          restDuration = 1;
+        } else {
+          // Use eighth rest (or whatever fits before midpoint)
+          restDuration = Math.min(0.5, beatsUntilMidpoint);
+        }
       } else {
-        // Use eighth rest (0.5 beats)
-        restDuration = 0.5;
+        // SECOND HALF or AT MIDPOINT: Normal greedy algorithm
+        if (remainingBeats >= 2) {
+          // Use half rest (2 beats)
+          restDuration = 2;
+        } else if (remainingBeats >= 1) {
+          // Use quarter rest (1 beat)
+          restDuration = 1;
+        } else {
+          // Use eighth rest (0.5 beats)
+          restDuration = 0.5;
+        }
       }
 
       rests.push({

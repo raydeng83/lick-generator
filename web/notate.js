@@ -201,23 +201,77 @@ window.Notate = (function () {
         }
       }
 
+      /**
+       * Helper to add rests that respect measure midpoint
+       * @param {number} gapStartBeat - Start beat of the gap (absolute)
+       * @param {number} gapDurationBeats - Duration of the gap in beats
+       */
+      function addRestsForGap(gapStartBeat, gapDurationBeats) {
+        // Calculate measure midpoint
+        const measureStart = Math.floor(gapStartBeat / 4) * 4;
+        const midpoint = measureStart + 2;
+        const gapEndBeat = gapStartBeat + gapDurationBeats;
+
+        // Check if gap crosses midpoint
+        if (gapStartBeat < midpoint && gapEndBeat > midpoint) {
+          // Split at midpoint
+          const beforeMidpoint = midpoint - gapStartBeat;
+          const afterMidpoint = gapEndBeat - midpoint;
+
+          // Add rests before midpoint
+          addRestsSingleHalf(gapStartBeat, beforeMidpoint);
+          // Add rests after midpoint
+          addRestsSingleHalf(midpoint, afterMidpoint);
+        } else {
+          // Doesn't cross midpoint - use normal greedy algorithm
+          addRestsSingleHalf(gapStartBeat, gapDurationBeats);
+        }
+      }
+
+      /**
+       * Helper to add rests within a single half of a measure (greedy algorithm)
+       * @param {number} startBeat - Start beat (absolute)
+       * @param {number} durationBeats - Duration in beats
+       */
+      function addRestsSingleHalf(startBeat, durationBeats) {
+        let remaining = durationBeats;
+        let currentBeat = startBeat;
+
+        while (remaining > 0) {
+          let restDuration;
+          if (remaining >= 2) {
+            restDuration = 2;
+          } else if (remaining >= 1) {
+            restDuration = 1;
+          } else {
+            restDuration = 0.5;
+          }
+
+          const dur = durationFromBeats(restDuration);
+          notes.push(new VF.StaveNote({ keys: ["b/4"], duration: dur + "r", auto_stem: true }));
+
+          const durE8 = Math.round(restDuration * 2);
+          cursorE8 += durE8;
+          remaining -= restDuration;
+          currentBeat += restDuration;
+        }
+      }
+
       let noteIndex = 0; // Track index in segNotes for enclosure labeling
       for (const n of segNotes) {
         // Handle rest notes
         if (n.isRest) {
           const relStartE8 = Math.round((n.startBeat - start) * 2);
-          const durE8 = Math.round(n.durationBeats * 2);
 
-          // Fill rests up to this rest note
-          while (cursorE8 < relStartE8) {
-            notes.push(new VF.StaveNote({ keys: ["b/4"], duration: "8r", auto_stem: true }));
-            cursorE8 += 1;
+          // Fill gaps before this rest using midpoint-aware logic
+          if (cursorE8 < relStartE8) {
+            const gapStartBeat = start + (cursorE8 / 2);
+            const gapDurationBeats = (relStartE8 - cursorE8) / 2;
+            addRestsForGap(gapStartBeat, gapDurationBeats);
           }
 
-          // Add the explicit rest note
-          const dur = durationFromBeats(n.durationBeats);
-          notes.push(new VF.StaveNote({ keys: ["b/4"], duration: dur + "r", auto_stem: true }));
-          cursorE8 += durE8;
+          // Add the explicit rest note using midpoint-aware logic
+          addRestsForGap(n.startBeat, n.durationBeats);
           continue;
         }
 
@@ -230,10 +284,11 @@ window.Notate = (function () {
         const relStartE8 = Math.round((n.startBeat - start) * 2);
         const durE8 = Math.round(n.durationBeats * 2);
 
-        // Fill rests up to this note
-        while (cursorE8 < relStartE8) {
-          notes.push(new VF.StaveNote({ keys: ["b/4"], duration: "8r", auto_stem: true }));
-          cursorE8 += 1;
+        // Fill gaps before this note using midpoint-aware logic
+        if (cursorE8 < relStartE8) {
+          const gapStartBeat = start + (cursorE8 / 2);
+          const gapDurationBeats = (relStartE8 - cursorE8) / 2;
+          addRestsForGap(gapStartBeat, gapDurationBeats);
         }
 
         const dur = durationFromBeats(n.durationBeats);
@@ -360,10 +415,11 @@ window.Notate = (function () {
         noteIndex++; // Increment index for enclosure labeling
       }
 
-      // Fill remaining slots with rests
-      while (cursorE8 < 8) {
-        notes.push(new VF.StaveNote({ keys: ["b/4"], duration: "8r", auto_stem: true }));
-        cursorE8 += 1;
+      // Fill remaining slots with rests using midpoint-aware logic
+      if (cursorE8 < 8) {
+        const gapStartBeat = start + (cursorE8 / 2);
+        const gapDurationBeats = (8 - cursorE8) / 2;
+        addRestsForGap(gapStartBeat, gapDurationBeats);
       }
 
       // Validate all notes before proceeding
