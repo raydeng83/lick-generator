@@ -321,8 +321,9 @@ window.Notate = (function () {
         }
 
         // Color code notes by harmonic function
-        if (n.harmonicFunction === 'chord-tone' || n.ruleId === 'chord-tone' ||
-            n.ruleId === 'arpeggio-chord-tone' || n.ruleId === 'scale-run-chord-tone') {
+        // IMPORTANT: Check harmonicFunction ONLY, not ruleId
+        // harmonicFunction is the authoritative label for color assignment
+        if (n.harmonicFunction === 'chord-tone') {
           // Chord tones: Blue (or black if colors disabled)
           const color = useColors ? '#4cc3ff' : '#000000';
           sn.setStyle({ fillStyle: color, strokeStyle: color });
@@ -335,11 +336,7 @@ window.Notate = (function () {
               .setVerticalJustification(VF.Annotation.VerticalJustify.BOTTOM);
             sn.addAnnotation(0, degreeAnn);
           }
-        } else if (n.harmonicFunction === 'scale-step' || n.ruleId === 'scale-step' ||
-                   n.ruleId === 'scale-run' || n.ruleId === 'melodic-cell' ||
-                   (n.ruleId === 'neighbor' && n.harmonicFunction === 'scale-step') ||
-                   (n.ruleId === 'enclosure-upper' && n.harmonicFunction === 'scale-step') ||
-                   (n.ruleId === 'enclosure-lower' && n.harmonicFunction === 'scale-step')) {
+        } else if (n.harmonicFunction === 'scale-step') {
           // Scale tones: Green (or black if colors disabled)
           const color = useColors ? '#34c759' : '#000000';
           sn.setStyle({ fillStyle: color, strokeStyle: color });
@@ -353,7 +350,7 @@ window.Notate = (function () {
             sn.addAnnotation(0, degreeAnn);
           }
         } else {
-          // Chromatic/device notes (outside scale): Orange (or black if colors disabled)
+          // Chromatic notes (outside scale): Orange (or black if colors disabled)
           const color = useColors ? '#ff9500' : '#000000';
           sn.setStyle({ fillStyle: color, strokeStyle: color });
         }

@@ -57,9 +57,10 @@ window.DevicesNew = (function () {
       return notes;
     }
 
-    // Get chord tones
+    // Get chord tones and scale pitch classes for validation
     const chordPcs = getChordPitchClasses(rootPc, quality);
     const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
+    const scalePcs = window.Scales ? window.Scales.getScalePitchClasses(rootPc, scale) : [];
 
     // Decide arpeggio type and direction
     const noteCount = Math.random() < 0.75 ? 4 : 3; // 75% four notes, 25% three notes
@@ -103,6 +104,9 @@ window.DevicesNew = (function () {
         }
       }
 
+      const isChordToneNote = isChordTone(midi, rootPc, chordPcs);
+      const inScale = isInScale(midi, scalePcs);
+
       notes.push({
         startBeat: measureStart + i * 0.5,
         durationBeats: 0.5,
@@ -113,8 +117,8 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
-        ruleId: 'arpeggio',
-        harmonicFunction: 'chord-tone',
+        ruleId: isChordToneNote ? 'arpeggio' : (inScale ? 'scale-step' : 'chromatic'),
+        harmonicFunction: isChordToneNote ? 'chord-tone' : (inScale ? 'scale-step' : 'chromatic'),
       });
 
       currentMidi = midi;
@@ -123,6 +127,9 @@ window.DevicesNew = (function () {
 
     // Last note for last measure (can be shorter)
     if (!isLastMeasure) {
+      const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
+      const inScale = isInScale(currentMidi, scalePcs);
+
       notes.push({
         startBeat: measureStart + 3.5,
         durationBeats: 0.5,
@@ -133,8 +140,8 @@ window.DevicesNew = (function () {
         rootPc,
         quality,
         scaleName: scale,
-        ruleId: 'arpeggio',
-        harmonicFunction: 'chord-tone',
+        ruleId: isChordToneNote ? 'arpeggio' : (inScale ? 'scale-step' : 'chromatic'),
+        harmonicFunction: isChordToneNote ? 'chord-tone' : (inScale ? 'scale-step' : 'chromatic'),
       });
     }
 
