@@ -54,7 +54,7 @@ window.Notate = (function () {
 
     // Layout: wrap measures onto multiple lines based on container width
     const renderer = new VF.Renderer(el, VF.Renderer.Backends.SVG);
-    const widthPerMeasure = 240; // base width
+    const widthPerMeasure = 320; // base width - increased for better spacing
     const extraFirstMeasure = 70; // extra room for clef/time per system
     const staveHeight = 120;
     const systemGap = 24; // vertical gap between systems
