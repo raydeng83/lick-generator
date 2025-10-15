@@ -391,9 +391,10 @@ window.LickGen = (function () {
   // ========== POST-PROCESSING ==========
 
   /**
-   * Insert random rests at 2-3 places in the lick
-   * Each place replaces 1-2 consecutive notes with a rest
+   * Insert random rests at 3 places in the lick
+   * Each place replaces 1, 2, or 3 consecutive notes with a rest
    * No restrictions - any note can be replaced
+   * Designed for rhythm practice with sparse note patterns
    */
   function insertRandomRests(notes, options = {}) {
     if (!notes || notes.length === 0) return notes;
@@ -411,8 +412,8 @@ window.LickGen = (function () {
       return notes;
     }
 
-    // Randomly select 2 or 3 places
-    const numPlaces = Math.random() < 0.5 ? 2 : 3;
+    // Always select 3 places
+    const numPlaces = 3;
     const selectedPlaces = [];
 
     // Shuffle and pick first N places
@@ -421,17 +422,31 @@ window.LickGen = (function () {
     for (let i = 0; i < Math.min(numPlaces, shuffled.length); i++) {
       const startIdx = shuffled[i];
 
-      // Determine if we replace 1 or 2 notes at this place
-      const numNotesToReplace = Math.random() < 0.5 ? 1 : 2;
+      // Determine if we replace 1, 2, or 3 notes at this place (equal probability)
+      const rand = Math.random();
+      const numNotesToReplace = rand < 0.33 ? 1 : (rand < 0.66 ? 2 : 3);
 
-      // Check if we can replace 2 consecutive notes
+      // Check if we can replace consecutive notes
       let endIdx = startIdx;
-      if (numNotesToReplace === 2 && startIdx + 1 < notes.length) {
+
+      // Helper to check if an index overlaps with any selected place
+      const isIndexUsed = (idx) => {
+        return selectedPlaces.some(p => idx >= p.startIdx && idx <= p.endIdx);
+      };
+
+      if (numNotesToReplace >= 2 && startIdx + 1 < notes.length) {
         const nextIdx = startIdx + 1;
-        // Only include next note if it's not a rest and not already selected
-        if (!notes[nextIdx].isRest &&
-            !selectedPlaces.some(p => p.startIdx === nextIdx || p.endIdx === nextIdx)) {
+        // Check if second note is available
+        if (!notes[nextIdx].isRest && !isIndexUsed(nextIdx)) {
           endIdx = nextIdx;
+        }
+      }
+
+      if (numNotesToReplace === 3 && endIdx === startIdx + 1 && startIdx + 2 < notes.length) {
+        const thirdIdx = startIdx + 2;
+        // Check if third note is available
+        if (!notes[thirdIdx].isRest && !isIndexUsed(thirdIdx)) {
+          endIdx = thirdIdx;
         }
       }
 
@@ -453,8 +468,9 @@ window.LickGen = (function () {
       const startBeat = result[startIdx].startBeat;
       let totalDuration = result[startIdx].durationBeats;
 
-      if (endIdx > startIdx) {
-        totalDuration += result[endIdx].durationBeats;
+      // Add duration of all consecutive notes
+      for (let idx = startIdx + 1; idx <= endIdx; idx++) {
+        totalDuration += result[idx].durationBeats;
       }
 
       // Create rest note with combined duration
@@ -462,7 +478,7 @@ window.LickGen = (function () {
         startBeat,
         durationBeats: totalDuration,
         isRest: true,
-        device: 'rest',
+        device: 'rest-inserted', // Mark as inserted rest (vs. device-generated rest)
         chordSymbol: result[startIdx].chordSymbol,
         rootPc: result[startIdx].rootPc,
         quality: result[startIdx].quality,
@@ -470,13 +486,8 @@ window.LickGen = (function () {
       };
 
       // Replace the note(s) with rest
-      if (endIdx > startIdx) {
-        // Replace 2 notes with 1 rest
-        result.splice(startIdx, 2, restNote);
-      } else {
-        // Replace 1 note with 1 rest
-        result.splice(startIdx, 1, restNote);
-      }
+      const numNotes = endIdx - startIdx + 1;
+      result.splice(startIdx, numNotes, restNote);
     }
 
     return result;

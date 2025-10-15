@@ -1,8 +1,8 @@
 [
   {
-    "midi": 65,
-    "noteName": "F4",
-    "degree": "b3",
+    "midi": 69,
+    "noteName": "A4",
+    "degree": "5",
     "startBeat": 0,
     "durationBeats": 0.5,
     "velocity": 0.9,
@@ -17,7 +17,7 @@
   {
     "startBeat": 0.5,
     "durationBeats": 0.5,
-    "midi": 64,
+    "midi": 67,
     "velocity": 0.9,
     "device": "enclosure-fill",
     "chordSymbol": "Dm7",
@@ -26,13 +26,13 @@
     "scaleName": "dorian",
     "ruleId": "scale-step",
     "harmonicFunction": "scale-step",
-    "noteName": "E4",
-    "degree": "2"
+    "noteName": "G4",
+    "degree": "4"
   },
   {
     "startBeat": 1,
     "durationBeats": 0.5,
-    "midi": 61,
+    "midi": 64,
     "velocity": 0.9,
     "device": "enclosure",
     "enclosureType": "lower",
@@ -42,12 +42,12 @@
     "scaleName": "dorian",
     "ruleId": "enclosure",
     "harmonicFunction": "chromatic",
-    "noteName": "Db4"
+    "noteName": "E4"
   },
   {
     "startBeat": 1.5,
     "durationBeats": 0.5,
-    "midi": 64,
+    "midi": 67,
     "velocity": 0.9,
     "device": "enclosure",
     "enclosureType": "upper",
@@ -57,13 +57,13 @@
     "scaleName": "dorian",
     "ruleId": "enclosure",
     "harmonicFunction": "scale-step",
-    "noteName": "E4",
-    "degree": "2"
+    "noteName": "G4",
+    "degree": "4"
   },
   {
     "startBeat": 2,
     "durationBeats": 0.5,
-    "midi": 62,
+    "midi": 65,
     "velocity": 0.9,
     "device": "enclosure-target",
     "chordSymbol": "Dm7",
@@ -72,28 +72,13 @@
     "scaleName": "dorian",
     "ruleId": "chord-tone",
     "harmonicFunction": "chord-tone",
-    "noteName": "D4",
-    "degree": "1"
+    "noteName": "F4",
+    "degree": "b3"
   },
   {
     "startBeat": 2.5,
     "durationBeats": 0.5,
-    "midi": 60,
-    "velocity": 0.9,
-    "device": "enclosure-fill",
-    "chordSymbol": "Dm7",
-    "rootPc": 2,
-    "quality": "m7",
-    "scaleName": "dorian",
-    "ruleId": "chord-tone",
-    "harmonicFunction": "chord-tone",
-    "noteName": "C4",
-    "degree": "b7"
-  },
-  {
-    "startBeat": 3,
-    "durationBeats": 0.5,
-    "midi": 61,
+    "midi": 66,
     "velocity": 0.9,
     "device": "enclosure",
     "enclosureType": "lower",
@@ -103,12 +88,28 @@
     "scaleName": "dorian",
     "ruleId": "enclosure",
     "harmonicFunction": "chromatic",
-    "noteName": "Db4"
+    "noteName": "Gb4"
+  },
+  {
+    "startBeat": 3,
+    "durationBeats": 0.5,
+    "midi": 69,
+    "velocity": 0.9,
+    "device": "enclosure",
+    "enclosureType": "upper-whole",
+    "chordSymbol": "Dm7",
+    "rootPc": 2,
+    "quality": "m7",
+    "scaleName": "dorian",
+    "ruleId": "enclosure",
+    "harmonicFunction": "chord-tone",
+    "noteName": "A4",
+    "degree": "5"
   },
   {
     "startBeat": 3.5,
     "durationBeats": 0.5,
-    "midi": 64,
+    "midi": 68,
     "velocity": 0.9,
     "device": "enclosure",
     "enclosureType": "upper",
@@ -117,14 +118,13 @@
     "quality": "m7",
     "scaleName": "dorian",
     "ruleId": "enclosure",
-    "harmonicFunction": "scale-step",
-    "noteName": "E4",
-    "degree": "2"
+    "harmonicFunction": "chromatic",
+    "noteName": "Ab4"
   },
   {
-    "midi": 62,
-    "noteName": "D4",
-    "degree": "5",
+    "midi": 67,
+    "noteName": "G4",
+    "degree": "1",
     "startBeat": 4,
     "durationBeats": 0.5,
     "velocity": 0.9,
@@ -138,21 +138,6 @@
   },
   {
     "startBeat": 4.5,
-    "durationBeats": 0.5,
-    "midi": 64,
-    "velocity": 0.9,
-    "device": "enclosure-fill",
-    "chordSymbol": "G7",
-    "rootPc": 7,
-    "quality": "7",
-    "scaleName": "mixolydian",
-    "ruleId": "scale-step",
-    "harmonicFunction": "scale-step",
-    "noteName": "E4",
-    "degree": "6"
-  },
-  {
-    "startBeat": 5,
     "durationBeats": 0.5,
     "midi": 67,
     "velocity": 0.9,
@@ -168,6 +153,21 @@
     "degree": "1"
   },
   {
+    "startBeat": 5,
+    "durationBeats": 0.5,
+    "midi": 63,
+    "velocity": 0.9,
+    "device": "enclosure",
+    "enclosureType": "lower-whole",
+    "chordSymbol": "G7",
+    "rootPc": 7,
+    "quality": "7",
+    "scaleName": "mixolydian",
+    "ruleId": "enclosure",
+    "harmonicFunction": "chromatic",
+    "noteName": "Eb4"
+  },
+  {
     "startBeat": 5.5,
     "durationBeats": 0.5,
     "midi": 64,
@@ -179,8 +179,9 @@
     "quality": "7",
     "scaleName": "mixolydian",
     "ruleId": "enclosure",
-    "harmonicFunction": "chromatic",
-    "noteName": "E4"
+    "harmonicFunction": "scale-step",
+    "noteName": "E4",
+    "degree": "6"
   },
   {
     "startBeat": 6,
@@ -200,22 +201,23 @@
   {
     "startBeat": 6.5,
     "durationBeats": 0.5,
-    "midi": 67,
+    "midi": 69,
     "velocity": 0.9,
-    "device": "enclosure-fill",
+    "device": "enclosure",
+    "enclosureType": "lower-whole",
     "chordSymbol": "G7",
     "rootPc": 7,
     "quality": "7",
     "scaleName": "mixolydian",
-    "ruleId": "chord-tone",
-    "harmonicFunction": "chord-tone",
-    "noteName": "G4",
-    "degree": "1"
+    "ruleId": "enclosure",
+    "harmonicFunction": "scale-step",
+    "noteName": "A4",
+    "degree": "2"
   },
   {
     "startBeat": 7,
     "durationBeats": 0.5,
-    "midi": 63,
+    "midi": 70,
     "velocity": 0.9,
     "device": "enclosure",
     "enclosureType": "lower",
@@ -225,12 +227,12 @@
     "scaleName": "mixolydian",
     "ruleId": "enclosure",
     "harmonicFunction": "chromatic",
-    "noteName": "Eb4"
+    "noteName": "Bb4"
   },
   {
     "startBeat": 7.5,
     "durationBeats": 0.5,
-    "midi": 65,
+    "midi": 72,
     "velocity": 0.9,
     "device": "enclosure",
     "enclosureType": "upper",
@@ -239,14 +241,14 @@
     "quality": "7",
     "scaleName": "mixolydian",
     "ruleId": "enclosure",
-    "harmonicFunction": "chord-tone",
-    "noteName": "F4",
-    "degree": "b7"
+    "harmonicFunction": "scale-step",
+    "noteName": "C5",
+    "degree": "4"
   },
   {
-    "midi": 64,
-    "noteName": "E4",
-    "degree": "3",
+    "midi": 71,
+    "noteName": "B4",
+    "degree": "7",
     "startBeat": 8,
     "durationBeats": 0.5,
     "velocity": 0.9,
@@ -261,63 +263,56 @@
   {
     "startBeat": 8.5,
     "durationBeats": 0.5,
-    "midi": 62,
+    "midi": 69,
     "velocity": 0.9,
-    "device": "enclosure-fill",
+    "device": "fill",
     "chordSymbol": "Cmaj7",
     "rootPc": 0,
     "quality": "maj7",
     "scaleName": "ionian",
     "ruleId": "scale-step",
     "harmonicFunction": "scale-step",
-    "noteName": "D4",
-    "degree": "2"
+    "noteName": "A4",
+    "degree": "6"
   },
   {
     "startBeat": 9,
     "durationBeats": 0.5,
-    "midi": 59,
+    "midi": 71,
     "velocity": 0.9,
-    "device": "enclosure",
-    "enclosureType": "lower",
-    "chordSymbol": "Cmaj7",
-    "rootPc": 0,
-    "quality": "maj7",
-    "scaleName": "ionian",
-    "ruleId": "enclosure",
-    "harmonicFunction": "chord-tone",
-    "noteName": "B3",
-    "degree": "7"
-  },
-  {
-    "startBeat": 9.5,
-    "durationBeats": 0.5,
-    "midi": 62,
-    "velocity": 0.9,
-    "device": "enclosure",
-    "enclosureType": "upper",
-    "chordSymbol": "Cmaj7",
-    "rootPc": 0,
-    "quality": "maj7",
-    "scaleName": "ionian",
-    "ruleId": "enclosure",
-    "harmonicFunction": "scale-step",
-    "noteName": "D4",
-    "degree": "2"
-  },
-  {
-    "startBeat": 10,
-    "durationBeats": 2,
-    "midi": 60,
-    "velocity": 0.9,
-    "device": "enclosure-target",
+    "device": "fill",
     "chordSymbol": "Cmaj7",
     "rootPc": 0,
     "quality": "maj7",
     "scaleName": "ionian",
     "ruleId": "chord-tone",
     "harmonicFunction": "chord-tone",
-    "noteName": "C4",
+    "noteName": "B4",
+    "degree": "7"
+  },
+  {
+    "startBeat": 9.5,
+    "durationBeats": 0.5,
+    "midi": 72,
+    "velocity": 0.9,
+    "device": "ending",
+    "chordSymbol": "Cmaj7",
+    "rootPc": 0,
+    "quality": "maj7",
+    "scaleName": "ionian",
+    "ruleId": "chord-tone",
+    "harmonicFunction": "chord-tone",
+    "noteName": "C5",
     "degree": "1"
+  },
+  {
+    "startBeat": 10,
+    "durationBeats": 2,
+    "isRest": true,
+    "device": "rest",
+    "chordSymbol": "Cmaj7",
+    "rootPc": 0,
+    "quality": "maj7",
+    "scaleName": "ionian"
   }
 ]
