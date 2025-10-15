@@ -883,6 +883,7 @@ window.DevicesNew = (function () {
       );
 
       const isChordToneNote1 = isChordTone(currentMidi, rootPc, chordPcs);
+      const inScale1 = isInScale(currentMidi, scalePcs);
 
       notes.push({
         startBeat: measureStart + 0.5,
@@ -895,7 +896,7 @@ window.DevicesNew = (function () {
         quality,
         scaleName: scale,
         ruleId: isChordToneNote1 ? 'chord-tone' : 'scale-step',
-        harmonicFunction: isChordToneNote1 ? 'chord-tone' : 'scale-step',
+        harmonicFunction: isChordToneNote1 ? 'chord-tone' : (inScale1 ? 'scale-step' : 'chromatic'),
       });
 
       // Middle target selection - avoid repeating current measure's 1st note and next measure's 1st note
@@ -1161,6 +1162,7 @@ window.DevicesNew = (function () {
       );
 
       const isChordToneNote2 = isChordTone(currentMidi, rootPc, chordPcs);
+      const inScale2 = isInScale(currentMidi, scalePcs);
 
       notes.push({
         startBeat: measureStart + 2.5,
@@ -1173,7 +1175,7 @@ window.DevicesNew = (function () {
         quality,
         scaleName: scale,
         ruleId: isChordToneNote2 ? 'chord-tone' : 'scale-step',
-        harmonicFunction: isChordToneNote2 ? 'chord-tone' : 'scale-step',
+        harmonicFunction: isChordToneNote2 ? 'chord-tone' : (inScale2 ? 'scale-step' : 'chromatic'),
       });
 
       // Slots 6-7: 2-note enclosure approaching next target
