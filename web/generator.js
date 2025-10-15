@@ -393,58 +393,15 @@ window.LickGen = (function () {
   /**
    * Insert random rests at 2-3 places in the lick
    * Each place replaces 1-2 consecutive notes with a rest
-   * Preserves first note of each measure, enclosure patterns, and ending notes
+   * No restrictions - any note can be replaced
    */
   function insertRandomRests(notes, options = {}) {
     if (!notes || notes.length === 0) return notes;
 
-    // Identify protected notes (cannot be replaced)
-    const protectedIndices = new Set();
-
-    // Pass 1: Protect first note of each measure and ending notes
-    notes.forEach((note, idx) => {
-      if (note.isRest) return;
-
-      // Protect first note of each measure
-      if (note.startBeat % 4 === 0) {
-        protectedIndices.add(idx);
-      }
-
-      // Protect ending notes
-      if (note.device === 'ending') {
-        protectedIndices.add(idx);
-      }
-    });
-
-    // Pass 2: Protect only the approach notes immediately before targets
-    // (2-3 notes before each enclosure-target)
-    notes.forEach((note, idx) => {
-      if (note.isRest) return;
-
-      if (note.device === 'enclosure-target') {
-        // Protect the target itself
-        protectedIndices.add(idx);
-
-        // Protect 2-3 notes before the target (the actual enclosure approach)
-        // Look back up to 3 notes
-        for (let lookBack = 1; lookBack <= 3 && idx - lookBack >= 0; lookBack++) {
-          const prevNote = notes[idx - lookBack];
-          if (!prevNote.isRest &&
-              (prevNote.device === 'enclosure' ||
-               prevNote.device === 'enclosure-fill')) {
-            protectedIndices.add(idx - lookBack);
-          } else {
-            // Stop looking back if we hit a non-enclosure note
-            break;
-          }
-        }
-      }
-    });
-
-    // Build list of replaceable note indices
+    // Build list of all non-rest note indices (no protection)
     const replaceableIndices = [];
     notes.forEach((note, idx) => {
-      if (!note.isRest && !protectedIndices.has(idx)) {
+      if (!note.isRest) {
         replaceableIndices.push(idx);
       }
     });
@@ -471,9 +428,8 @@ window.LickGen = (function () {
       let endIdx = startIdx;
       if (numNotesToReplace === 2 && startIdx + 1 < notes.length) {
         const nextIdx = startIdx + 1;
-        // Only include next note if it's also replaceable and not already selected
-        if (!protectedIndices.has(nextIdx) &&
-            !notes[nextIdx].isRest &&
+        // Only include next note if it's not a rest and not already selected
+        if (!notes[nextIdx].isRest &&
             !selectedPlaces.some(p => p.startIdx === nextIdx || p.endIdx === nextIdx)) {
           endIdx = nextIdx;
         }
