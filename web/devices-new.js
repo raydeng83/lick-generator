@@ -497,18 +497,14 @@ window.DevicesNew = (function () {
 
       // Fill remaining slots with rests to complete the measure (8 eighth notes)
       const totalNotesGenerated = totalSlots + 1; // target + fill notes + ending
-      const remainingSlots = 8 - totalNotesGenerated;
-      for (let i = 0; i < remainingSlots; i++) {
-        notes.push({
-          startBeat: measureStart + (totalNotesGenerated + i) * 0.5,
-          durationBeats: 0.5,
-          isRest: true, // Mark as rest
-          device: 'rest',
-          chordSymbol: chord.symbol,
-          rootPc,
-          quality,
-          scaleName: scale,
-        });
+      const remainingBeats = (8 - totalNotesGenerated) * 0.5;
+      if (remainingBeats > 0) {
+        const restNotes = generateCombinedRests(
+          measureStart + totalNotesGenerated * 0.5,
+          remainingBeats,
+          { symbol: chord.symbol, rootPc, quality, scaleName: scale }
+        );
+        notes.push(...restNotes);
       }
     } else {
       // ===== SCENARIO B: End AFTER beat 10 (keep enclosure, add more notes) =====
@@ -646,18 +642,14 @@ window.DevicesNew = (function () {
 
       // Fill remaining slots with rests to complete the measure (8 eighth notes)
       const totalNotesGenerated = 5 + additionalSlots; // target + fill + 2 enclosures + target + additional notes
-      const remainingSlots = 8 - totalNotesGenerated;
-      for (let i = 0; i < remainingSlots; i++) {
-        notes.push({
-          startBeat: measureStart + (totalNotesGenerated + i) * 0.5,
-          durationBeats: 0.5,
-          isRest: true, // Mark as rest
-          device: 'rest',
-          chordSymbol: chord.symbol,
-          rootPc,
-          quality,
-          scaleName: scale,
-        });
+      const remainingBeats = (8 - totalNotesGenerated) * 0.5;
+      if (remainingBeats > 0) {
+        const restNotes = generateCombinedRests(
+          measureStart + totalNotesGenerated * 0.5,
+          remainingBeats,
+          { symbol: chord.symbol, rootPc, quality, scaleName: scale }
+        );
+        notes.push(...restNotes);
       }
     }
 
@@ -1130,6 +1122,51 @@ window.DevicesNew = (function () {
   }
 
   // ========== HELPER FUNCTIONS ==========
+
+  /**
+   * Generate properly combined rests according to music notation rules
+   * Combines consecutive rests into larger note values (quarter, half) when possible
+   * @param {number} startBeat - Starting beat for the rest(s)
+   * @param {number} totalBeats - Total duration of rest in beats
+   * @param {object} chord - Chord context (symbol, rootPc, quality, scaleName)
+   * @returns {Array} Array of rest note objects with proper durations
+   */
+  function generateCombinedRests(startBeat, totalBeats, chord) {
+    const rests = [];
+    let currentBeat = startBeat;
+    let remainingBeats = totalBeats;
+
+    while (remainingBeats > 0) {
+      let restDuration;
+
+      if (remainingBeats >= 2) {
+        // Use half rest (2 beats) when possible
+        restDuration = 2;
+      } else if (remainingBeats >= 1) {
+        // Use quarter rest (1 beat)
+        restDuration = 1;
+      } else {
+        // Use eighth rest (0.5 beats)
+        restDuration = 0.5;
+      }
+
+      rests.push({
+        startBeat: currentBeat,
+        durationBeats: restDuration,
+        isRest: true,
+        device: 'rest',
+        chordSymbol: chord.symbol,
+        rootPc: chord.rootPc,
+        quality: chord.quality,
+        scaleName: chord.scaleName,
+      });
+
+      currentBeat += restDuration;
+      remainingBeats -= restDuration;
+    }
+
+    return rests;
+  }
 
   function getChordPitchClasses(rootPc, quality) {
     if (window.LickGen) {
