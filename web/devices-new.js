@@ -467,8 +467,8 @@ window.DevicesNew = (function () {
         const isLastSlot = (i === totalSlots - 1);
 
         if (isLastSlot) {
-          // Last note: must be root/3rd/5th (avoid duplicating previous note)
-          currentMidi = getValidEndingNote(currentMidi, [currentMidi]);
+          // Last note: must be root/3rd/5th (avoid duplicating previous note and first note of measure)
+          currentMidi = getValidEndingNote(currentMidi, [currentMidi, targetNote.midi]);
         } else {
           // Fill with scale steps
           currentMidi = avoidConsecutiveDuplicate(
@@ -590,13 +590,18 @@ window.DevicesNew = (function () {
           : (upperIsChordTone ? 'chord-tone' : 'scale-step'),
       });
 
+      // Add 0-3 more notes after beat 10, ending on root/3rd/5th
+      // 30% chance of 0 (target IS the ending), otherwise 1-3 additional notes
+      const additionalSlots = Math.random() < 0.3 ? 0 : (1 + Math.floor(Math.random() * 3)); // 0-3 slots
+
       // Slot 4 (beat 10.0): 5th note target (chord tone)
+      // If no additional notes, this IS the ending
       notes.push({
         startBeat: measureStart + 2.0,
         durationBeats: 0.5,
         midi: finalTargetMidi,
         velocity: 0.9,
-        device: 'enclosure-target',
+        device: additionalSlots === 0 ? 'ending' : 'enclosure-target',
         chordSymbol: chord.symbol,
         rootPc,
         quality,
@@ -604,17 +609,14 @@ window.DevicesNew = (function () {
         ruleId: 'chord-tone',
         harmonicFunction: 'chord-tone',
       });
-
-      // Add 1-3 more notes after beat 10, ending on root/3rd/5th
-      const additionalSlots = 1 + Math.floor(Math.random() * 3); // 1-3 slots
       currentMidi = finalTargetMidi;
 
       for (let i = 0; i < additionalSlots; i++) {
         const isLastSlot = (i === additionalSlots - 1);
 
         if (isLastSlot) {
-          // Last note: must be root/3rd/5th (avoid duplicating previous note)
-          currentMidi = getValidEndingNote(currentMidi, [currentMidi]);
+          // Last note: must be root/3rd/5th (avoid duplicating previous note and first note of measure)
+          currentMidi = getValidEndingNote(currentMidi, [currentMidi, targetNote.midi]);
         } else {
           // Fill with scale steps
           currentMidi = avoidConsecutiveDuplicate(
