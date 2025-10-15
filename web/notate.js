@@ -422,7 +422,7 @@ window.Notate = (function () {
 
               // Position below the staff and below degree annotations
               // Staff is at y, staff lines span ~80px, degree annotations are ~15px below staff
-              const textY = y + 135; // Much lower to avoid overlap with degree numbers
+              const textY = y + 175; // Much lower to avoid overlap with degree numbers
 
               // Draw the label
               const labelText = enclosureType === '2-note' ? '2-note enclosure' : '3-note enclosure';
