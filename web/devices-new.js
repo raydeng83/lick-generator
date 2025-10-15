@@ -104,6 +104,22 @@ window.DevicesNew = (function () {
         }
       }
 
+      // Avoid consecutive duplicate notes
+      if (midi === currentMidi) {
+        midi = avoidConsecutiveDuplicate(currentMidi, () => {
+          // Try adjacent chord tones or move by octave
+          const nextChordIndex = (chordIndex + direction + chordAbs.length) % chordAbs.length;
+          const nextPc = chordAbs[nextChordIndex];
+          let candidateMidi = currentOctave * 12 + nextPc;
+
+          // Clamp to range
+          while (candidateMidi < 55) candidateMidi += 12;
+          while (candidateMidi > 81) candidateMidi -= 12;
+
+          return candidateMidi;
+        });
+      }
+
       const isChordToneNote = isChordTone(midi, rootPc, chordPcs);
       const inScale = isInScale(midi, scalePcs);
 
@@ -125,15 +141,48 @@ window.DevicesNew = (function () {
       currentOctave = Math.floor(midi / 12);
     }
 
-    // Last note for last measure (can be shorter)
+    // Last note for non-last measure (8th note at beat 3.5)
+    // Note: currentMidi already holds the last note from the loop, which was already added
+    // So we should NOT add it again - this would create a duplicate!
+    // The loop generates 7 notes total (target + 6 notes = beats 0, 0.5, 1, 1.5, 2, 2.5, 3)
+    // We need an 8th note at beat 3.5 only if it's different from beat 3.0's note
     if (!isLastMeasure) {
-      const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
-      const inScale = isInScale(currentMidi, scalePcs);
+      // Check if we need to add an 8th note
+      // The loop fills beats 0-3 (7 notes), we need beat 3.5 (8th note)
+      // But beat 3 (note 7) already used currentMidi, so adding it again would duplicate
+      // We should generate a new note that differs from BOTH the previous note AND next target
+      const prevMidi = currentMidi;
+      const nextTargetMidi = nextTarget ? nextTarget.midi : null;
+
+      let lastNoteMidi = avoidConsecutiveDuplicate(
+        currentMidi,
+        () => {
+          // Try next chord tone, avoiding next target's MIDI value
+          let attempts = 0;
+          let midi;
+          do {
+            chordIndex = (chordIndex + direction + chordAbs.length) % chordAbs.length;
+            const pc = chordAbs[chordIndex];
+            midi = currentOctave * 12 + pc;
+
+            // Clamp to range
+            while (midi < 55) midi += 12;
+            while (midi > 81) midi -= 12;
+
+            attempts++;
+          } while (nextTargetMidi && midi === nextTargetMidi && attempts < 3);
+
+          return midi;
+        }
+      );
+
+      const isChordToneNote = isChordTone(lastNoteMidi, rootPc, chordPcs);
+      const inScale = isInScale(lastNoteMidi, scalePcs);
 
       notes.push({
         startBeat: measureStart + 3.5,
         durationBeats: 0.5,
-        midi: currentMidi,
+        midi: lastNoteMidi,
         velocity: 0.9,
         device: 'arpeggio',
         chordSymbol: chord.symbol,
@@ -180,7 +229,11 @@ window.DevicesNew = (function () {
       const direction = Math.random() < 0.5 ? 1 : -1;
       const chordPcs = getChordPitchClasses(rootPc, quality);
       for (let i = 1; i < 6; i++) {
-        currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, direction);
+        const prevMidi = currentMidi;
+        currentMidi = avoidConsecutiveDuplicate(
+          currentMidi,
+          () => nextScaleNote(prevMidi, rootPc, scalePcs, direction)
+        );
         const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
         const inScale = isInScale(currentMidi, scalePcs);
         notes.push({
@@ -207,7 +260,11 @@ window.DevicesNew = (function () {
     // First half: scale run in random direction
     const chordPcs = getChordPitchClasses(rootPc, quality);
     for (let i = 1; i <= 3; i++) {
-      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, startDirection);
+      const prevMidi = currentMidi;
+      currentMidi = avoidConsecutiveDuplicate(
+        currentMidi,
+        () => nextScaleNote(prevMidi, rootPc, scalePcs, startDirection)
+      );
       const isChordToneNote = isChordTone(currentMidi, rootPc, chordPcs);
       const inScale = isInScale(currentMidi, scalePcs);
       notes.push({
@@ -1645,12 +1702,26 @@ window.DevicesNew = (function () {
 
     let currentMidi = startMidi;
     for (let i = 0; i < noteCount; i++) {
-      currentMidi = nextScaleNote(currentMidi, rootPc, scalePcs, direction);
+      const prevMidi = currentMidi;
+      currentMidi = avoidConsecutiveDuplicate(
+        currentMidi,
+        () => {
+          let attempts = 0;
+          let midi;
+          do {
+            midi = nextScaleNote(prevMidi, rootPc, scalePcs, direction);
 
-      // Don't go past or reach the target
-      if ((direction > 0 && currentMidi >= targetMidi) || (direction < 0 && currentMidi <= targetMidi)) {
-        currentMidi = targetMidi + (direction * -1 * (i + 1)); // Step back
-      }
+            // Don't go past or reach the target
+            if ((direction > 0 && midi >= targetMidi) || (direction < 0 && midi <= targetMidi)) {
+              midi = targetMidi + (direction * -1 * (i + 1)); // Step back
+            }
+
+            attempts++;
+          } while (midi === targetMidi && attempts < 3); // Extra check: don't match target
+
+          return midi;
+        }
+      );
 
       notes.push(currentMidi);
     }
