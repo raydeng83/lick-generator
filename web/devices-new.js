@@ -701,8 +701,8 @@ window.DevicesNew = (function () {
 
     if (use3NoteFirst) {
       // 3-note enclosure: slots 1, 2, 3 approach middle target (slot 4)
-      // Middle target selection
-      middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi]);
+      // Middle target selection - avoid repeating current measure's 1st note and next measure's 1st note
+      middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi, nextTarget.midi]);
 
       // Generate 3-note enclosure
       const enclosureNotes = generate3NoteEnclosure(middleTargetMidi, rootPc, scalePcs, chordPcs, chord, quality, scale);
@@ -750,8 +750,8 @@ window.DevicesNew = (function () {
         harmonicFunction: isChordToneNote1 ? 'chord-tone' : 'scale-step',
       });
 
-      // Middle target selection
-      middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi]);
+      // Middle target selection - avoid repeating current measure's 1st note and next measure's 1st note
+      middleTargetMidi = selectChordTone(currentMidi, chordAbs, [targetNote.midi, nextTarget.midi]);
 
       // Slots 2-3: 2-note enclosure approaching middle target
       const lowerNeighbor1 = middleTargetMidi - 1;
@@ -806,12 +806,12 @@ window.DevicesNew = (function () {
       currentMidi = slot3Midi;
     }
 
-    // Slot 4: Middle target - avoid duplicating last enclosure note
+    // Slot 4: Middle target - avoid duplicating last enclosure note and next measure's 1st note
     let finalMiddleTargetMidi = middleTargetMidi;
     if (finalMiddleTargetMidi === currentMidi) {
       finalMiddleTargetMidi = avoidConsecutiveDuplicate(
         currentMidi,
-        () => selectChordTone(currentMidi, chordAbs, [targetNote.midi, currentMidi])
+        () => selectChordTone(currentMidi, chordAbs, [targetNote.midi, currentMidi, nextTarget.midi])
       );
     }
 

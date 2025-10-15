@@ -172,10 +172,12 @@ window.LickGen = (function () {
   /**
    * Pre-fill first note of each measure with a random chord tone
    * This defines all target notes upfront before device generation
+   * Avoids repeating the previous measure's 1st note
    */
   function prefillTargets(measures, options = {}) {
     const { startPitch = 64 } = options;
     let lastMidi = startPitch;
+    let previousFirstNoteMidi = null;
 
     return measures.map((measure, idx) => {
       // Get random chord tone near lastMidi
@@ -196,20 +198,29 @@ window.LickGen = (function () {
       // Sort by distance and pick with weighted randomness
       candidates.sort((a, b) => Math.abs(a - lastMidi) - Math.abs(b - lastMidi));
 
+      // Filter out the previous measure's 1st note to avoid repetition
+      const filteredCandidates = previousFirstNoteMidi !== null
+        ? candidates.filter(midi => midi !== previousFirstNoteMidi)
+        : candidates;
+
+      // Use filtered candidates, fallback to all candidates if none left
+      const finalCandidates = filteredCandidates.length > 0 ? filteredCandidates : candidates;
+
       // Weighted selection: prefer closer notes but allow variety
       const rand = Math.random();
       let targetMidi;
-      if (rand < 0.5 && candidates.length >= 2) {
+      if (rand < 0.5 && finalCandidates.length >= 2) {
         // 50%: pick from closest 2
-        targetMidi = candidates[Math.floor(Math.random() * Math.min(2, candidates.length))];
-      } else if (rand < 0.8 && candidates.length >= 4) {
+        targetMidi = finalCandidates[Math.floor(Math.random() * Math.min(2, finalCandidates.length))];
+      } else if (rand < 0.8 && finalCandidates.length >= 4) {
         // 30%: pick from next 2
-        targetMidi = candidates[2 + Math.floor(Math.random() * Math.min(2, candidates.length - 2))];
+        targetMidi = finalCandidates[2 + Math.floor(Math.random() * Math.min(2, finalCandidates.length - 2))];
       } else {
         // 20%: pick from any remaining
-        targetMidi = candidates[Math.floor(Math.random() * candidates.length)];
+        targetMidi = finalCandidates[Math.floor(Math.random() * finalCandidates.length)];
       }
 
+      previousFirstNoteMidi = targetMidi;
       lastMidi = targetMidi;
 
       // Calculate degree for target note
