@@ -62,7 +62,7 @@ window.Notate = (function () {
     const rightMargin = 10;
     const topMargin = 35; // increased to prevent chord symbol truncation
     const bottomMargin = 80; // increased to accommodate enclosure labels below staff
-    const containerWidth = Math.max(320, el.clientWidth || (el.parentElement && el.parentElement.clientWidth) || 800);
+    const containerWidth = Math.max(320, el.clientWidth || (el.parentElement && el.parentElement.clientWidth) || 1200);
 
     // First pass: compute measure positions and number of systems
     const layout = [];
