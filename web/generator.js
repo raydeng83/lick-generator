@@ -391,13 +391,13 @@ window.LickGen = (function () {
   // ========== POST-PROCESSING ==========
 
   /**
-   * Insert random rests at 3 places in the lick
-   * Each place replaces 1, 2, or 3 consecutive notes with a rest
+   * Insert random rests with one place per measure
+   * Each measure gets one random starting point where 1, 2, or 3 consecutive notes are replaced
    * Protection rules:
-   * - Never replace first note (target/chord tone)
-   * - Never replace last note (ending note)
-   * - Ensure at least 40% of notes remain as non-rests
-   * Designed for rhythm practice with sparse note patterns
+   * - Never replace first note of entire lick (target/chord tone)
+   * - Never replace last note of entire lick (ending note)
+   * - Ensure at least 40% of notes remain as non-rests across entire lick
+   * Designed for rhythm practice with evenly distributed rest patterns
    */
   function insertRandomRests(notes, options = {}) {
     if (!notes || notes.length === 0) return notes;
@@ -423,64 +423,74 @@ window.LickGen = (function () {
       return notes;
     }
 
-    // Build list of replaceable note indices
-    // Protection: exclude first non-rest note (always index 0) and last non-rest note
-    const replaceableIndices = [];
+    // Group notes by measure (assuming 4 beats per measure)
+    const measureGroups = new Map(); // Map<measureNumber, noteIndices[]>
     notes.forEach((note, idx) => {
-      if (!note.isRest && idx !== 0 && idx !== lastNonRestIdx) {
-        replaceableIndices.push(idx);
+      if (!note.isRest) {
+        const measureNum = Math.floor(note.startBeat / 4);
+        if (!measureGroups.has(measureNum)) {
+          measureGroups.set(measureNum, []);
+        }
+        measureGroups.get(measureNum).push(idx);
       }
     });
 
-    if (replaceableIndices.length === 0) {
-      console.log('[Generator] No replaceable notes found for rest insertion');
-      return notes;
-    }
+    console.log(`[Generator] Found ${measureGroups.size} measures for rest insertion`);
 
-    // Always select 3 places
-    const numPlaces = 3;
+    // For each measure, select one random place to insert rests
     const selectedPlaces = [];
 
-    // Shuffle and pick first N places
-    const shuffled = [...replaceableIndices].sort(() => Math.random() - 0.5);
+    for (const [measureNum, noteIndices] of measureGroups.entries()) {
+      // Filter out protected notes (first note of lick and last note of lick)
+      const replaceableIndices = noteIndices.filter(idx => idx !== 0 && idx !== lastNonRestIdx);
 
-    for (let i = 0; i < Math.min(numPlaces, shuffled.length); i++) {
-      const startIdx = shuffled[i];
+      if (replaceableIndices.length === 0) {
+        console.log(`[Generator] Measure ${measureNum}: No replaceable notes, skipping`);
+        continue;
+      }
 
-      // Determine if we replace 1, 2, or 3 notes at this place (equal probability)
+      // Randomly pick one starting position in this measure
+      const startIdx = replaceableIndices[Math.floor(Math.random() * replaceableIndices.length)];
+
+      // Randomly determine if we replace 1, 2, or 3 notes at this place (equal probability)
       const rand = Math.random();
       const numNotesToReplace = rand < 0.33 ? 1 : (rand < 0.66 ? 2 : 3);
 
       // Check if we can replace consecutive notes
       let endIdx = startIdx;
 
-      // Helper to check if an index overlaps with any selected place
-      const isIndexUsed = (idx) => {
-        return selectedPlaces.some(p => idx >= p.startIdx && idx <= p.endIdx);
-      };
-
       // Helper to check if index is protected (first or last non-rest note)
       const isProtected = (idx) => {
         return idx === 0 || idx === lastNonRestIdx;
       };
 
+      // Try to extend to 2 notes
       if (numNotesToReplace >= 2 && startIdx + 1 < notes.length) {
         const nextIdx = startIdx + 1;
-        // Check if second note is available and not protected
-        if (!notes[nextIdx].isRest && !isIndexUsed(nextIdx) && !isProtected(nextIdx)) {
+        const nextNote = notes[nextIdx];
+        // Check if:
+        // - Next note exists and is not a rest
+        // - Next note is in the same measure
+        // - Next note is not protected
+        const nextMeasure = Math.floor(nextNote.startBeat / 4);
+        if (!nextNote.isRest && nextMeasure === measureNum && !isProtected(nextIdx)) {
           endIdx = nextIdx;
         }
       }
 
+      // Try to extend to 3 notes
       if (numNotesToReplace === 3 && endIdx === startIdx + 1 && startIdx + 2 < notes.length) {
         const thirdIdx = startIdx + 2;
-        // Check if third note is available and not protected
-        if (!notes[thirdIdx].isRest && !isIndexUsed(thirdIdx) && !isProtected(thirdIdx)) {
+        const thirdNote = notes[thirdIdx];
+        // Check if third note is available, in same measure, and not protected
+        const thirdMeasure = Math.floor(thirdNote.startBeat / 4);
+        if (!thirdNote.isRest && thirdMeasure === measureNum && !isProtected(thirdIdx)) {
           endIdx = thirdIdx;
         }
       }
 
-      selectedPlaces.push({ startIdx, endIdx });
+      selectedPlaces.push({ startIdx, endIdx, measureNum });
+      console.log(`[Generator] Measure ${measureNum}: Selected rest at index ${startIdx}-${endIdx} (${endIdx - startIdx + 1} notes)`);
     }
 
     // Validate that we're not replacing too many notes
@@ -491,18 +501,20 @@ window.LickGen = (function () {
 
     if (notesRemaining < minNotesToKeep) {
       console.log(`[Generator] Would replace too many notes (${notesToReplace}/${nonRestNotes.length}), keeping minimum ${minNotesToKeep}`);
-      // Remove the last selected place (the one that would replace the most notes)
+      // Sort places by size (largest first) and remove until we meet threshold
       selectedPlaces.sort((a, b) => {
         const sizeA = a.endIdx - a.startIdx + 1;
         const sizeB = b.endIdx - b.startIdx + 1;
         return sizeB - sizeA; // Sort by size descending
       });
+
       // Remove places until we meet the threshold
       while (selectedPlaces.length > 0) {
         const totalToReplace = selectedPlaces.reduce((sum, p) => sum + (p.endIdx - p.startIdx + 1), 0);
         const remaining = nonRestNotes.length - totalToReplace;
         if (remaining >= minNotesToKeep) break;
-        selectedPlaces.pop(); // Remove the largest place
+        const removed = selectedPlaces.pop();
+        console.log(`[Generator] Removed rest from measure ${removed.measureNum} to meet threshold`);
       }
     }
 
@@ -514,7 +526,7 @@ window.LickGen = (function () {
     // Sort places by index to process from end to beginning (avoids index shifting issues)
     selectedPlaces.sort((a, b) => b.startIdx - a.startIdx);
 
-    console.log('[Generator] Inserting rests at', selectedPlaces.length, 'places:', selectedPlaces);
+    console.log('[Generator] Inserting rests at', selectedPlaces.length, 'places');
 
     // Replace notes with rests at selected places
     const result = [...notes];
