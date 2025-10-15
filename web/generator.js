@@ -721,17 +721,24 @@ window.LickGen = (function () {
     const pc = (midi % 12 + 12) % 12;
     const relPc = (pc - rootPc + 12) % 12;
 
+    // FIRST: Check if this note is actually in the chord
+    // Only return a degree if the interval is a valid chord tone
+    if (!chordPcs.includes(relPc)) {
+      return null; // Not a chord tone
+    }
+
+    // ONLY include basic chord tones: root, 3rd, 5th, 7th
+    // No upper structure notes (9, 11, 13)
     const degreeMap = {
-      0: '1',
-      2: '9',
-      3: 'b3',
-      4: '3',
-      5: '11',
-      6: 'b5',
-      7: '5',
-      9: '13',
-      10: 'b7',
-      11: '7'
+      0: '1',    // root
+      3: 'b3',   // minor 3rd
+      4: '3',    // major 3rd
+      6: 'b5',   // diminished 5th
+      7: '5',    // perfect 5th
+      8: '#5',   // augmented 5th
+      9: '6',    // major 6th (for 6 chords)
+      10: 'b7',  // minor 7th
+      11: '7'    // major 7th
     };
 
     return degreeMap[relPc] || '?';
