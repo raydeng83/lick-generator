@@ -140,7 +140,7 @@ window.Notate = (function () {
             const nextNote = nonRestNotes[idx + 1];
 
             if (nextNote.device === 'enclosure-fill') {
-              // 2-note enclosure: target → fill → 2 enclosure notes
+              // 2-note enclosure: target → fill → 2 enclosure notes → (target or ending)
               // Count the enclosure notes after the fill
               let enclosureCount = 0;
               for (let j = idx + 2; j < nonRestNotes.length && nonRestNotes[j].device === 'enclosure'; j++) {
@@ -148,9 +148,16 @@ window.Notate = (function () {
               }
 
               if (enclosureCount === 2) {
-                // Label at the fill note (first note of the visual pattern)
-                enclosureLabels.set(idx + 1, '2-note');
-                skipUntilIdx = idx + 3; // Skip fill + 2 enclosure notes
+                // Check if followed by ending note (Scenario B variant where beat 10 IS ending)
+                // or by another target (regular scenario)
+                const targetOrEnding = idx + 4 < nonRestNotes.length ?
+                  (nonRestNotes[idx + 4].device === 'enclosure-target' || nonRestNotes[idx + 4].device === 'ending') : false;
+
+                if (targetOrEnding || idx + 4 >= nonRestNotes.length) {
+                  // Label at the fill note (first note of the visual pattern)
+                  enclosureLabels.set(idx + 1, '2-note');
+                  skipUntilIdx = idx + 3; // Skip fill + 2 enclosure notes
+                }
               }
             } else if (nextNote.device === 'enclosure') {
               // 3-note enclosure: target → 3 enclosure notes (no fill)
