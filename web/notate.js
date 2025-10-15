@@ -91,13 +91,6 @@ window.Notate = (function () {
     renderer.resize(containerWidth, totalHeight);
     const ctx = renderer.getContext();
 
-    // Debug: Add border to SVG and log dimensions
-    console.log('[Notate] SVG dimensions:', containerWidth, 'x', totalHeight);
-    const svgElement = el.querySelector('svg');
-    if (svgElement) {
-      svgElement.style.border = '2px solid red';
-      console.log('[Notate] SVG element:', svgElement.width.baseVal.value, 'x', svgElement.height.baseVal.value);
-    }
 
     for (let i = 0; i < measureCount; i++) {
       const seg = measures[i];
