@@ -390,6 +390,124 @@ window.LickGen = (function () {
 
   // ========== POST-PROCESSING ==========
 
+  /**
+   * Insert random rests at 2-3 places in the lick
+   * Each place replaces 1-2 consecutive notes with a rest
+   * Preserves first note of each measure, enclosure patterns, and ending notes
+   */
+  function insertRandomRests(notes, options = {}) {
+    if (!notes || notes.length === 0) return notes;
+
+    // Identify protected notes (cannot be replaced)
+    const protectedIndices = new Set();
+
+    // Find first note of each measure (at beat 0, 4, 8, 12, etc.)
+    notes.forEach((note, idx) => {
+      if (note.isRest) return;
+
+      // Protect first note of each measure
+      if (note.startBeat % 4 === 0) {
+        protectedIndices.add(idx);
+      }
+
+      // Protect enclosure pattern notes
+      if (note.device === 'enclosure' ||
+          note.device === 'enclosure-target' ||
+          note.device === 'enclosure-fill') {
+        protectedIndices.add(idx);
+      }
+
+      // Protect ending notes
+      if (note.device === 'ending') {
+        protectedIndices.add(idx);
+      }
+    });
+
+    // Build list of replaceable note indices
+    const replaceableIndices = [];
+    notes.forEach((note, idx) => {
+      if (!note.isRest && !protectedIndices.has(idx)) {
+        replaceableIndices.push(idx);
+      }
+    });
+
+    if (replaceableIndices.length === 0) {
+      console.log('[Generator] No replaceable notes found for rest insertion');
+      return notes;
+    }
+
+    // Randomly select 2 or 3 places
+    const numPlaces = Math.random() < 0.5 ? 2 : 3;
+    const selectedPlaces = [];
+
+    // Shuffle and pick first N places
+    const shuffled = [...replaceableIndices].sort(() => Math.random() - 0.5);
+
+    for (let i = 0; i < Math.min(numPlaces, shuffled.length); i++) {
+      const startIdx = shuffled[i];
+
+      // Determine if we replace 1 or 2 notes at this place
+      const numNotesToReplace = Math.random() < 0.5 ? 1 : 2;
+
+      // Check if we can replace 2 consecutive notes
+      let endIdx = startIdx;
+      if (numNotesToReplace === 2 && startIdx + 1 < notes.length) {
+        const nextIdx = startIdx + 1;
+        // Only include next note if it's also replaceable and not already selected
+        if (!protectedIndices.has(nextIdx) &&
+            !notes[nextIdx].isRest &&
+            !selectedPlaces.some(p => p.startIdx === nextIdx || p.endIdx === nextIdx)) {
+          endIdx = nextIdx;
+        }
+      }
+
+      selectedPlaces.push({ startIdx, endIdx });
+    }
+
+    // Sort places by index to process from end to beginning (avoids index shifting issues)
+    selectedPlaces.sort((a, b) => b.startIdx - a.startIdx);
+
+    console.log('[Generator] Inserting rests at', selectedPlaces.length, 'places:', selectedPlaces);
+
+    // Replace notes with rests at selected places
+    const result = [...notes];
+
+    for (const place of selectedPlaces) {
+      const { startIdx, endIdx } = place;
+
+      // Calculate combined duration and timing
+      const startBeat = result[startIdx].startBeat;
+      let totalDuration = result[startIdx].durationBeats;
+
+      if (endIdx > startIdx) {
+        totalDuration += result[endIdx].durationBeats;
+      }
+
+      // Create rest note with combined duration
+      const restNote = {
+        startBeat,
+        durationBeats: totalDuration,
+        isRest: true,
+        device: 'rest',
+        chordSymbol: result[startIdx].chordSymbol,
+        rootPc: result[startIdx].rootPc,
+        quality: result[startIdx].quality,
+        scaleName: result[startIdx].scaleName,
+      };
+
+      // Replace the note(s) with rest
+      if (endIdx > startIdx) {
+        // Replace 2 notes with 1 rest
+        result.splice(startIdx, 2, restNote);
+      } else {
+        // Replace 1 note with 1 rest
+        result.splice(startIdx, 1, restNote);
+      }
+    }
+
+    return result;
+  }
+
   function postProcess(notes, options = {}) {
     const { swing = 0 } = options;
 
@@ -536,8 +654,14 @@ window.LickGen = (function () {
     console.log('[Generator] Phase 3: Generated', notes.length, 'notes');
 
     // Phase 4: Post-process
-    const final = postProcess(notes, options);
+    let final = postProcess(notes, options);
     console.log('[Generator] Phase 4: Post-processing complete');
+
+    // Phase 5: Insert random rests (optional)
+    if (options.insertRests) {
+      final = insertRandomRests(final, options);
+      console.log('[Generator] Phase 5: Random rests inserted');
+    }
 
     return final;
   }

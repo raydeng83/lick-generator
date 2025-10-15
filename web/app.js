@@ -14,6 +14,7 @@
     swingValue: $("#swingValue"),
     metronome: $("#metronome"),
     chords: $("#chords"),
+    insertRests: $("#insertRests"),
     coloredNotes: $("#coloredNotes"),
     generate: $("#generate"),
     play: $("#play"),
@@ -111,7 +112,8 @@
       scaleStrategy: ui.scaleStrategy.value || 'default',
       deviceStrategy: deviceStrategyValue,
       useDevices: deviceStrategyValue !== 'disabled',
-      swing: 0  // Always generate with straight timing (swing applied at playback)
+      swing: 0,  // Always generate with straight timing (swing applied at playback)
+      insertRests: ui.insertRests.checked  // Random rest insertion
     };
 
     const lick = LickGen.generateLick(progression, meta, options);
