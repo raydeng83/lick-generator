@@ -17,6 +17,8 @@
     rhythmControls: $("#rhythmControls"),
     exerciseChord: $("#exerciseChord"),
     numRests: $("#numRests"),
+    numMeasures: $("#numMeasures"),
+    generateExercises: $("#generateExercises"),
     diceIt: $("#diceIt"),
     firstPattern: $("#firstPattern"),
     prevPattern: $("#prevPattern"),
@@ -509,7 +511,77 @@
     setStatus(`Pattern 1/${allPatterns.length}`);
   }
 
+  /**
+   * Generate multiple measures with unique rest patterns
+   */
+  function generateMultiMeasureExercises() {
+    if (!originalRhythmPhrase) {
+      setStatus('Generate a phrase first.');
+      return;
+    }
+
+    const numRests = parseInt(ui.numRests.value, 10) || 0;
+    const requestedMeasures = parseInt(ui.numMeasures.value, 10) || 10;
+
+    // Generate all patterns
+    const allAvailablePatterns = generateAllPatterns(numRests);
+    const maxMeasures = allAvailablePatterns.length;
+
+    // Limit to available patterns
+    const actualMeasures = Math.min(requestedMeasures, maxMeasures);
+
+    if (requestedMeasures > maxMeasures) {
+      console.log(`[Rhythm Exercise] Requested ${requestedMeasures} measures but only ${maxMeasures} unique patterns available`);
+    }
+
+    // Use first N patterns (no shuffling, sequential)
+    const selectedPatterns = allAvailablePatterns.slice(0, actualMeasures);
+
+    // Build multi-measure lick
+    const chordSymbol = ui.exerciseChord.value || 'Cmaj7';
+    const allMeasures = [];
+    const progression = [];
+
+    for (let i = 0; i < actualMeasures; i++) {
+      const pattern = selectedPatterns[i];
+      const measureStart = i * 4;
+
+      // Apply pattern to original phrase
+      const phraseWithRests = applyPattern(pattern);
+
+      // Adjust startBeat for this measure
+      const adjustedPhrase = phraseWithRests.map(note => ({
+        ...note,
+        startBeat: note.startBeat + measureStart,
+      }));
+
+      allMeasures.push(...adjustedPhrase);
+
+      // Add to progression
+      progression.push({
+        symbol: chordSymbol,
+        bar: i,
+        startBeat: measureStart,
+        durationBeats: 4,
+      });
+    }
+
+    // Create model
+    const meta = { tempo: 120, timeSig: '4/4' };
+    const model = {
+      progression,
+      bars: actualMeasures,
+      lick: allMeasures,
+      metadata: meta,
+    };
+
+    lastModel = model;
+    renderAll(model);
+    setStatus(`Generated ${actualMeasures} measure(s) with unique rest patterns.`);
+  }
+
   // Rhythm exercise button listeners
+  ui.generateExercises.addEventListener('click', generateMultiMeasureExercises);
   ui.diceIt.addEventListener('click', diceItPattern);
   ui.firstPattern.addEventListener('click', firstPattern);
   ui.nextPattern.addEventListener('click', nextPattern);
