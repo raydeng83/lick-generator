@@ -5,7 +5,26 @@
   const d$ = (sel) => Array.from(document.querySelectorAll(sel));
 
   const ui = {
+    // Mode toggles
+    modeProgression: $("#modeProgression"),
+    modeRhythm: $("#modeRhythm"),
+
+    // Progression mode
+    progressionControls: $("#progressionControls"),
     progression: $("#progression"),
+
+    // Rhythm exercise mode
+    rhythmControls: $("#rhythmControls"),
+    exerciseChord: $("#exerciseChord"),
+    numRests: $("#numRests"),
+    diceIt: $("#diceIt"),
+    firstPattern: $("#firstPattern"),
+    prevPattern: $("#prevPattern"),
+    nextPattern: $("#nextPattern"),
+    patternInfo: $("#patternInfo"),
+    resetOriginal: $("#resetOriginal"),
+
+    // Common controls
     tempo: $("#tempo"),
     instrument: $("#instrument"),
     scaleStrategy: $("#scaleStrategy"),
@@ -102,7 +121,63 @@
   let lastModelWithoutRests = null; // Store version without inserted rests
   let lastModelWithRests = null; // Store version with current rest pattern
 
+  // Rhythm exercise state
+  let rhythmExerciseMode = false;
+  let originalRhythmPhrase = null; // The 8-note phrase without rests
+  let currentRhythmPhrase = null; // The phrase with rests inserted
+  let allPatterns = []; // All possible rest patterns for current numRests
+  let currentPatternIndex = 0; // Index in allPatterns
+
   function setStatus(s) { ui.status.textContent = s; }
+
+  // Mode switching
+  function switchMode(mode) {
+    rhythmExerciseMode = (mode === 'rhythm');
+
+    if (rhythmExerciseMode) {
+      // Show rhythm controls, hide progression controls
+      ui.progressionControls.style.display = 'none';
+      ui.rhythmControls.style.display = 'block';
+      ui.regenerateRests.style.display = 'none';
+      ui.showRests.parentElement.style.display = 'none'; // Hide "Show Rests" checkbox
+      ui.diceIt.style.display = 'inline-block';
+      ui.firstPattern.style.display = 'inline-block';
+      ui.prevPattern.style.display = 'inline-block';
+      ui.nextPattern.style.display = 'inline-block';
+      ui.patternInfo.style.display = 'inline-block';
+      ui.resetOriginal.style.display = 'inline-block';
+      ui.generate.textContent = 'Generate Phrase';
+    } else {
+      // Show progression controls, hide rhythm controls
+      ui.progressionControls.style.display = 'block';
+      ui.rhythmControls.style.display = 'none';
+      ui.regenerateRests.style.display = 'inline-block';
+      ui.showRests.parentElement.style.display = 'inline-block';
+      ui.diceIt.style.display = 'none';
+      ui.firstPattern.style.display = 'none';
+      ui.prevPattern.style.display = 'none';
+      ui.nextPattern.style.display = 'none';
+      ui.patternInfo.style.display = 'none';
+      ui.resetOriginal.style.display = 'none';
+      ui.generate.textContent = 'Generate';
+    }
+  }
+
+  // Mode toggle listeners
+  ui.modeProgression.addEventListener('change', () => {
+    if (ui.modeProgression.checked) {
+      switchMode('progression');
+    }
+  });
+
+  ui.modeRhythm.addEventListener('change', () => {
+    if (ui.modeRhythm.checked) {
+      switchMode('rhythm');
+    }
+  });
+
+  // Initialize mode
+  switchMode('progression');
 
   // Apply swing timing to a lick (without regenerating notes)
   function applySwingToLick(lick, swingRatio) {
@@ -148,7 +223,304 @@
     return swung;
   }
 
+  // Rhythm exercise functions
+
+  /**
+   * Generate all possible rest patterns for given number of rests
+   * Returns array of arrays, where each inner array contains indices [0-7]
+   */
+  function generateAllPatterns(numRests) {
+    if (numRests === 0) return [[]];
+    if (numRests === 8) return [[0,1,2,3,4,5,6,7]];
+
+    const patterns = [];
+
+    // Generate combinations using recursion
+    function combine(start, chosen) {
+      if (chosen.length === numRests) {
+        patterns.push([...chosen]);
+        return;
+      }
+
+      for (let i = start; i < 8; i++) {
+        chosen.push(i);
+        combine(i + 1, chosen);
+        chosen.pop();
+      }
+    }
+
+    combine(0, []);
+    return patterns;
+  }
+
+  /**
+   * Apply a specific rest pattern to the original phrase
+   * Combines consecutive rests while respecting measure midpoint (beat 2)
+   */
+  function applyPattern(pattern) {
+    if (!originalRhythmPhrase) return null;
+
+    const result = [];
+    let i = 0;
+
+    while (i < 8) {
+      if (pattern.includes(i)) {
+        // This position should be a rest
+        // Find consecutive rests
+        let consecutiveCount = 1;
+        while (i + consecutiveCount < 8 && pattern.includes(i + consecutiveCount)) {
+          consecutiveCount++;
+        }
+
+        const startBeat = i * 0.5; // Each eighth note is 0.5 beats
+        const originalNote = originalRhythmPhrase[i];
+
+        // Check if rests cross midpoint (beat 2 = index 4)
+        const startIndex = i;
+        const endIndex = i + consecutiveCount - 1;
+
+        // Midpoint is at index 4 (beat 2)
+        if (startIndex < 4 && endIndex >= 4) {
+          // Rests cross midpoint - split into two rests
+          const restsBeforeMidpoint = 4 - startIndex; // Number of eighth rests before midpoint
+          const restsAfterMidpoint = endIndex - 3; // Number of eighth rests after midpoint (inclusive)
+
+          // Add rest before midpoint
+          result.push({
+            startBeat: startBeat,
+            durationBeats: restsBeforeMidpoint * 0.5,
+            isRest: true,
+            device: 'rest',
+            chordSymbol: originalNote.chordSymbol,
+            rootPc: originalNote.rootPc,
+            quality: originalNote.quality,
+            scaleName: originalNote.scaleName,
+          });
+
+          // Add rest after midpoint
+          result.push({
+            startBeat: 2, // Midpoint is at beat 2
+            durationBeats: restsAfterMidpoint * 0.5,
+            isRest: true,
+            device: 'rest',
+            chordSymbol: originalNote.chordSymbol,
+            rootPc: originalNote.rootPc,
+            quality: originalNote.quality,
+            scaleName: originalNote.scaleName,
+          });
+        } else {
+          // Rests don't cross midpoint - combine into single rest
+          result.push({
+            startBeat: startBeat,
+            durationBeats: consecutiveCount * 0.5,
+            isRest: true,
+            device: 'rest',
+            chordSymbol: originalNote.chordSymbol,
+            rootPc: originalNote.rootPc,
+            quality: originalNote.quality,
+            scaleName: originalNote.scaleName,
+          });
+        }
+
+        i += consecutiveCount;
+      } else {
+        // This position is a note
+        result.push(originalRhythmPhrase[i]);
+        i++;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Update pattern info display
+   */
+  function updatePatternInfo() {
+    const numRests = parseInt(ui.numRests.value, 10) || 0;
+    if (numRests === 0 || allPatterns.length === 0) {
+      ui.patternInfo.textContent = '';
+    } else {
+      ui.patternInfo.textContent = `${currentPatternIndex + 1}/${allPatterns.length}`;
+    }
+  }
+
+  function buildRhythmExerciseModel() {
+    const chordSymbol = ui.exerciseChord.value || 'Cmaj7';
+    const meta = Schema.defaultMetadata();
+    meta.tempo = 120;
+
+    const options = {
+      scaleStrategy: ui.scaleStrategy.value || 'default',
+      deviceStrategy: ui.deviceStrategy.value || 'varied',
+    };
+
+    // Generate original phrase (8 eighth notes)
+    const phrase = LickGen.generateRhythmExercisePhrase(chordSymbol, options);
+
+    // Store original phrase
+    originalRhythmPhrase = phrase;
+    currentRhythmPhrase = phrase;
+
+    // Reset pattern state
+    allPatterns = [];
+    currentPatternIndex = 0;
+    updatePatternInfo();
+
+    // Create progression with single measure
+    const progression = [{ symbol: chordSymbol, bar: 0, startBeat: 0, durationBeats: 4 }];
+
+    const model = { progression, bars: 1, lick: phrase, metadata: meta };
+    lastModel = model;
+    return model;
+  }
+
+  function diceItPattern() {
+    if (!originalRhythmPhrase) {
+      setStatus('Generate a phrase first.');
+      return;
+    }
+
+    const numRests = parseInt(ui.numRests.value, 10) || 0;
+
+    // Generate all patterns if not already done
+    if (allPatterns.length === 0 || allPatterns[0].length !== numRests) {
+      allPatterns = generateAllPatterns(numRests);
+      console.log(`[Rhythm Exercise] Generated ${allPatterns.length} patterns for ${numRests} rests`);
+    }
+
+    // Pick random pattern
+    currentPatternIndex = Math.floor(Math.random() * allPatterns.length);
+    const pattern = allPatterns[currentPatternIndex];
+
+    // Apply pattern
+    const phraseWithRests = applyPattern(pattern);
+    currentRhythmPhrase = phraseWithRests;
+
+    // Update model
+    const chordSymbol = ui.exerciseChord.value || 'Cmaj7';
+    const progression = [{ symbol: chordSymbol, bar: 0, startBeat: 0, durationBeats: 4 }];
+    const model = { progression, bars: 1, lick: phraseWithRests, metadata: lastModel.metadata };
+    lastModel = model;
+
+    updatePatternInfo();
+    renderAll(model);
+    setStatus(`Pattern ${currentPatternIndex + 1}/${allPatterns.length}`);
+  }
+
+  function nextPattern() {
+    if (!originalRhythmPhrase || allPatterns.length === 0) {
+      setStatus('Generate a phrase and dice it first.');
+      return;
+    }
+
+    currentPatternIndex = (currentPatternIndex + 1) % allPatterns.length;
+    const pattern = allPatterns[currentPatternIndex];
+
+    // Apply pattern
+    const phraseWithRests = applyPattern(pattern);
+    currentRhythmPhrase = phraseWithRests;
+
+    // Update model
+    const chordSymbol = ui.exerciseChord.value || 'Cmaj7';
+    const progression = [{ symbol: chordSymbol, bar: 0, startBeat: 0, durationBeats: 4 }];
+    const model = { progression, bars: 1, lick: phraseWithRests, metadata: lastModel.metadata };
+    lastModel = model;
+
+    updatePatternInfo();
+    renderAll(model);
+    setStatus(`Pattern ${currentPatternIndex + 1}/${allPatterns.length}`);
+  }
+
+  function previousPattern() {
+    if (!originalRhythmPhrase || allPatterns.length === 0) {
+      setStatus('Generate a phrase and dice it first.');
+      return;
+    }
+
+    currentPatternIndex = (currentPatternIndex - 1 + allPatterns.length) % allPatterns.length;
+    const pattern = allPatterns[currentPatternIndex];
+
+    // Apply pattern
+    const phraseWithRests = applyPattern(pattern);
+    currentRhythmPhrase = phraseWithRests;
+
+    // Update model
+    const chordSymbol = ui.exerciseChord.value || 'Cmaj7';
+    const progression = [{ symbol: chordSymbol, bar: 0, startBeat: 0, durationBeats: 4 }];
+    const model = { progression, bars: 1, lick: phraseWithRests, metadata: lastModel.metadata };
+    lastModel = model;
+
+    updatePatternInfo();
+    renderAll(model);
+    setStatus(`Pattern ${currentPatternIndex + 1}/${allPatterns.length}`);
+  }
+
+  function resetToOriginalPhrase() {
+    if (!originalRhythmPhrase) {
+      setStatus('Generate a phrase first.');
+      return;
+    }
+
+    currentRhythmPhrase = originalRhythmPhrase;
+    allPatterns = [];
+    currentPatternIndex = 0;
+    updatePatternInfo();
+
+    const chordSymbol = ui.exerciseChord.value || 'Cmaj7';
+    const progression = [{ symbol: chordSymbol, bar: 0, startBeat: 0, durationBeats: 4 }];
+    const model = { progression, bars: 1, lick: originalRhythmPhrase, metadata: lastModel.metadata };
+    lastModel = model;
+
+    renderAll(model);
+    setStatus('Reset to original phrase.');
+  }
+
+  function firstPattern() {
+    if (!originalRhythmPhrase) {
+      setStatus('Generate a phrase first.');
+      return;
+    }
+
+    const numRests = parseInt(ui.numRests.value, 10) || 0;
+
+    // Generate all patterns if not already done
+    if (allPatterns.length === 0 || allPatterns[0].length !== numRests) {
+      allPatterns = generateAllPatterns(numRests);
+      console.log(`[Rhythm Exercise] Generated ${allPatterns.length} patterns for ${numRests} rests`);
+    }
+
+    // Go to first pattern
+    currentPatternIndex = 0;
+    const pattern = allPatterns[currentPatternIndex];
+
+    // Apply pattern
+    const phraseWithRests = applyPattern(pattern);
+    currentRhythmPhrase = phraseWithRests;
+
+    // Update model
+    const chordSymbol = ui.exerciseChord.value || 'Cmaj7';
+    const progression = [{ symbol: chordSymbol, bar: 0, startBeat: 0, durationBeats: 4 }];
+    const model = { progression, bars: 1, lick: phraseWithRests, metadata: lastModel.metadata };
+    lastModel = model;
+
+    updatePatternInfo();
+    renderAll(model);
+    setStatus(`Pattern 1/${allPatterns.length}`);
+  }
+
+  // Rhythm exercise button listeners
+  ui.diceIt.addEventListener('click', diceItPattern);
+  ui.firstPattern.addEventListener('click', firstPattern);
+  ui.nextPattern.addEventListener('click', nextPattern);
+  ui.prevPattern.addEventListener('click', previousPattern);
+  ui.resetOriginal.addEventListener('click', resetToOriginalPhrase);
+
   function buildModel() {
+    if (rhythmExerciseMode) {
+      return buildRhythmExerciseModel();
+    }
+
     const meta = Schema.defaultMetadata();
     meta.tempo = 120;  // Default tempo (actual tempo set at playback time)
     const { progression, bars } = Schema.parseProgression(ui.progression.value);

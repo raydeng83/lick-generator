@@ -19,9 +19,44 @@
 
       <section class="controls">
         <div class="field">
-          <label for="progression">Chord Progression</label>
-          <textarea id="progression" rows="3" placeholder="Dm7 | G7 | Cmaj7"></textarea>
-          <div class="hint">Use `|` to separate bars. Space-separated chords split the bar equally.</div>
+          <label>Mode</label>
+          <div class="mode-toggle">
+            <label class="inline"><input type="radio" name="mode" value="progression" id="modeProgression" checked /> Progression</label>
+            <label class="inline"><input type="radio" name="mode" value="rhythm" id="modeRhythm" /> Rhythm Exercise</label>
+          </div>
+        </div>
+
+        <!-- Progression Mode -->
+        <div id="progressionControls">
+          <div class="field">
+            <label for="progression">Chord Progression</label>
+            <textarea id="progression" rows="3" placeholder="Dm7 | G7 | Cmaj7"></textarea>
+            <div class="hint">Use `|` to separate bars. Space-separated chords split the bar equally.</div>
+          </div>
+        </div>
+
+        <!-- Rhythm Exercise Mode -->
+        <div id="rhythmControls" style="display: none;">
+          <div class="row">
+            <div class="field">
+              <label for="exerciseChord">Chord</label>
+              <input id="exerciseChord" type="text" placeholder="Cmaj7" value="Cmaj7" />
+            </div>
+            <div class="field">
+              <label for="numRests">Number of Rests</label>
+              <select id="numRests">
+                <option value="0">0 (Original)</option>
+                <option value="1">1 rest (8 patterns)</option>
+                <option value="2">2 rests (28 patterns)</option>
+                <option value="3" selected>3 rests (56 patterns)</option>
+                <option value="4">4 rests (70 patterns)</option>
+                <option value="5">5 rests (56 patterns)</option>
+                <option value="6">6 rests (28 patterns)</option>
+                <option value="7">7 rests (8 patterns)</option>
+                <option value="8">8 rests (1 pattern)</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div class="row">
@@ -74,7 +109,13 @@
           <div class="spacer"></div>
           <div class="buttons">
             <button id="generate">Generate</button>
-            <button id="regenerateRests">New Rests</button>
+            <button id="regenerateRests" style="display: none;">New Rests</button>
+            <button id="diceIt" style="display: none;">Dice it</button>
+            <button id="firstPattern" style="display: none;">First Pattern</button>
+            <button id="prevPattern" style="display: none;">Previous Pattern</button>
+            <button id="nextPattern" style="display: none;">Next Pattern</button>
+            <span id="patternInfo" style="display: none; margin: 0 8px; color: var(--muted); font-size: 13px;"></span>
+            <button id="resetOriginal" style="display: none;">Reset to Original</button>
             <button id="play">Play</button>
             <button id="stop">Stop</button>
           </div>

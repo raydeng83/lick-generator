@@ -792,6 +792,164 @@ window.LickGen = (function () {
     return String(scaleIndex + 1);
   }
 
+  // ========== RHYTHM EXERCISE ==========
+
+  /**
+   * Generate a single measure (8 eighth notes) for rhythm exercise
+   * @param {string} chordSymbol - Chord symbol (e.g., "Cmaj7", "Dm7")
+   * @param {object} options - Generation options (deviceStrategy, scaleStrategy, etc.)
+   * @returns {array} Array of 8 note objects (guaranteed no rests)
+   */
+  function generateRhythmExercisePhrase(chordSymbol, options = {}) {
+    console.log('[Generator] Rhythm Exercise - Generating phrase for', chordSymbol);
+
+    const rootPc = parseRoot(chordSymbol) ?? 0;
+    const quality = parseQuality(chordSymbol);
+    const scaleName = window.Scales ? window.Scales.selectScale(quality, options.scaleStrategy || 'default') : 'major';
+
+    // Create a single measure
+    const measure = {
+      bar: 0,
+      measureStart: 0,
+      chord: { symbol: chordSymbol, startBeat: 0, durationBeats: 4 },
+      rootPc,
+      quality,
+      scale: scaleName,
+    };
+
+    // Generate target note (first note) - always a chord tone
+    const chordPcs = chordPitchClasses(rootPc, quality);
+    const chordAbs = chordPcs.map(pc => (rootPc + pc) % 12);
+
+    // Pick a chord tone near middle C
+    const targetMidi = 60 + chordAbs[0]; // Root note around C4
+    const degree = getChordDegree(targetMidi, rootPc, chordPcs);
+
+    const targetNote = {
+      midi: targetMidi,
+      noteName: midiToNoteName(targetMidi, rootPc, scaleName),
+      degree,
+      startBeat: 0,
+      durationBeats: 0.5,
+      velocity: 0.9,
+      ruleId: 'chord-tone',
+      harmonicFunction: 'chord-tone',
+    };
+
+    // Always use simple measure generation to ensure 8 notes without rests
+    const devicePlanned = {
+      ...measure,
+      targetNote,
+    };
+
+    // Generate simple scale-based pattern (guaranteed 8 eighth notes)
+    let notes = generateSimpleMeasure(devicePlanned);
+
+    // Ensure we have exactly 8 notes and no rests
+    notes = notes.filter(n => !n.isRest).slice(0, 8);
+
+    // If we somehow don't have 8 notes, fill with scale steps
+    while (notes.length < 8) {
+      const lastNote = notes[notes.length - 1];
+      const scalePcs = window.Scales
+        ? window.Scales.getScalePitchClasses(rootPc, scaleName)
+        : [0, 2, 4, 5, 7, 9, 11];
+
+      const scaleAbs = scalePcs.map(pc => (rootPc + pc) % 12);
+      const currentPc = lastNote.midi % 12;
+      const idx = scaleAbs.findIndex(pc => pc === currentPc);
+      const nextIdx = (idx + 1) % scaleAbs.length;
+      const nextPc = scaleAbs[nextIdx];
+
+      let nextMidi = Math.floor(lastNote.midi / 12) * 12 + nextPc;
+      if (nextMidi <= lastNote.midi) nextMidi += 12;
+      while (nextMidi < 55) nextMidi += 12;
+      while (nextMidi > 81) nextMidi -= 12;
+
+      notes.push({
+        startBeat: notes.length * 0.5,
+        durationBeats: 0.5,
+        midi: nextMidi,
+        noteName: midiToNoteName(nextMidi, rootPc, scaleName),
+        velocity: 0.9,
+        ruleId: 'scale-step',
+        harmonicFunction: 'scale-step',
+        degree: null,
+        scaleName,
+        chordSymbol,
+        rootPc,
+        quality,
+      });
+    }
+
+    // Post-process (add note names, degrees, etc.)
+    const processed = postProcess(notes, { swing: 0 });
+
+    console.log('[Generator] Rhythm Exercise - Generated', processed.length, 'notes (all non-rest)');
+    return processed;
+  }
+
+  /**
+   * Insert random rests into a rhythm exercise phrase
+   * @param {array} originalPhrase - The original 8-note phrase
+   * @param {number} numRests - Number of rests to insert (0-8)
+   * @returns {array} New phrase with rests randomly inserted
+   */
+  function insertRhythmRests(originalPhrase, numRests) {
+    if (numRests === 0) {
+      return originalPhrase;
+    }
+
+    if (numRests === 8) {
+      // All rests - replace every note
+      return originalPhrase.map(note => ({
+        startBeat: note.startBeat,
+        durationBeats: note.durationBeats,
+        isRest: true,
+        device: 'rest',
+        chordSymbol: note.chordSymbol,
+        rootPc: note.rootPc,
+        quality: note.quality,
+        scaleName: note.scaleName,
+      }));
+    }
+
+    // Generate random positions for rests
+    // Use Fisher-Yates shuffle to pick random indices
+    const indices = [0, 1, 2, 3, 4, 5, 6, 7];
+    const restPositions = [];
+
+    // Shuffle and take first numRests elements
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+
+    for (let i = 0; i < numRests; i++) {
+      restPositions.push(indices[i]);
+    }
+
+    console.log('[Generator] Rhythm Exercise - Inserting rests at positions:', restPositions.sort((a, b) => a - b));
+
+    // Create new phrase with rests
+    return originalPhrase.map((note, idx) => {
+      if (restPositions.includes(idx)) {
+        return {
+          startBeat: note.startBeat,
+          durationBeats: note.durationBeats,
+          isRest: true,
+          device: 'rest',
+          chordSymbol: note.chordSymbol,
+          rootPc: note.rootPc,
+          quality: note.quality,
+          scaleName: note.scaleName,
+        };
+      } else {
+        return note;
+      }
+    });
+  }
+
   // ========== PUBLIC API ==========
 
   return {
@@ -803,5 +961,7 @@ window.LickGen = (function () {
     selectDevicesForMeasures,
     generateWithTargets,
     insertRandomRests,  // Expose for direct use
+    generateRhythmExercisePhrase,  // Rhythm exercise
+    insertRhythmRests,  // Rhythm exercise rests
   };
 })();

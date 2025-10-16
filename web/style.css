@@ -82,3 +82,36 @@ button:active { transform: translateY(1px); }
 .json pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size: 12px; color: #334155; }
 
 footer { color: var(--muted); font-size: 12px; padding: 4px 0; }
+
+/* Mode toggle */
+.mode-toggle {
+  display: flex;
+  gap: 16px;
+  padding: 4px 0;
+}
+
+.mode-toggle .inline {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Rhythm exercise controls */
+#rhythmControls .row {
+  margin-top: 0;
+}
+
+#exerciseChord {
+  max-width: 200px;
+}
+
+#numRests {
+  min-width: 200px;
+}
+
+#patternInfo {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 500;
+}
